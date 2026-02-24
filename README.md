@@ -27,3 +27,9 @@ Puis ouvrez: `http://127.0.0.1:8000`
 ```bash
 pytest -q
 ```
+
+
+## Authentification
+- Inscription avec: username unique, mot de passe hashé, email, prénom, nom, date de naissance.
+- Connexion via username + mot de passe.
+- Le menu de l'en-tête change selon l'état connecté/déconnecté.

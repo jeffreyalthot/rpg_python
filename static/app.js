@@ -1,15 +1,55 @@
 const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
 const spendButton = document.getElementById('spendButton');
 const statusEl = document.getElementById('status');
 const playersEl = document.getElementById('players');
 const paBar = document.getElementById('paBar');
 const paText = document.getElementById('paText');
+const menuButtons = document.getElementById('menuButtons');
 
 let username = null;
 let maxPA = 20;
 
 const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
 const ws = new WebSocket(`${wsProtocol}://${window.location.host}/ws`);
+
+function buttonLabel(text) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = text;
+  return button;
+}
+
+function renderMenu() {
+  const disconnectedMenu = ['Home', 'Login', 'Inscription'];
+  const connectedMenu = [
+    'Accueil',
+    'Inventaire',
+    'Quêtes',
+    'Combats',
+    'Personnage',
+    'Equipe',
+    'Guilde',
+    'Messages',
+    'Boutique',
+    'Déconnection',
+  ];
+
+  const labels = username ? connectedMenu : disconnectedMenu;
+  menuButtons.innerHTML = '';
+  labels.forEach((label) => {
+    const button = buttonLabel(label);
+    if (label === 'Déconnection') {
+      button.addEventListener('click', () => {
+        username = null;
+        renderPA(0);
+        statusEl.textContent = 'Déconnecté.';
+        renderMenu();
+      });
+    }
+    menuButtons.appendChild(button);
+  });
+}
 
 function renderPA(current) {
   const safe = Math.max(0, Math.min(maxPA, current));
@@ -38,6 +78,25 @@ ws.onmessage = (event) => {
   }
 };
 
+registerForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const formData = new FormData(registerForm);
+
+  const response = await fetch('/api/register', {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Erreur lors de l\'inscription';
+    return;
+  }
+
+  statusEl.textContent = 'Inscription réussie. Vous pouvez vous connecter.';
+  registerForm.reset();
+});
+
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(loginForm);
@@ -58,6 +117,7 @@ loginForm.addEventListener('submit', async (event) => {
   renderPA(data.action_points);
   statusEl.textContent = `Bienvenue ${username}. Régénération: ${data.recharge_per_hour} PA/h.`;
   spendButton.disabled = false;
+  renderMenu();
 });
 
 spendButton.addEventListener('click', async () => {
@@ -80,3 +140,5 @@ spendButton.addEventListener('click', async () => {
   renderPA(data.action_points);
   statusEl.textContent = `Action effectuée. Il reste ${data.action_points} PA.`;
 });
+
+renderMenu();

@@ -8,11 +8,7 @@
 </head>
 <body>
   <header class="header">
-    <nav class="menu-buttons">
-      <button>Accueil</button>
-      <button>Inventaire</button>
-      <button>Quêtes</button>
-    </nav>
+    <nav id="menuButtons" class="menu-buttons"></nav>
 
     <section class="pa-panel" aria-label="Barre des points d'action">
       <div class="pa-label">Points d'action</div>
@@ -27,9 +23,37 @@
     <h1>Jeu multijoueur</h1>
 
     <form id="loginForm" class="card">
-      <label for="username">Nom du joueur</label>
+      <h2>Connexion</h2>
+      <label for="username">Username</label>
       <input id="username" name="username" required minlength="2" maxlength="20" />
-      <button type="submit">Se connecter</button>
+
+      <label for="password">Mot de passe</label>
+      <input id="password" name="password" type="password" required minlength="6" />
+
+      <button type="submit">Login</button>
+    </form>
+
+    <form id="registerForm" class="card">
+      <h2>Inscription</h2>
+      <label for="registerUsername">Username unique</label>
+      <input id="registerUsername" name="username" required minlength="2" maxlength="20" />
+
+      <label for="registerPassword">Mot de passe</label>
+      <input id="registerPassword" name="password" type="password" required minlength="6" />
+
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required />
+
+      <label for="firstName">Prénom</label>
+      <input id="firstName" name="first_name" required />
+
+      <label for="lastName">Nom</label>
+      <input id="lastName" name="last_name" required />
+
+      <label for="birthDate">Date de naissance</label>
+      <input id="birthDate" name="birth_date" type="date" required />
+
+      <button type="submit">Inscription</button>
     </form>
 
     <section class="card">
