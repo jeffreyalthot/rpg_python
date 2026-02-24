@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from database import create_user, get_user_by_username, init_db, verify_password
 from game_logic import MAX_ACTION_POINTS, RECHARGE_PER_HOUR, PlayerState, normalize_player_state
 
 app = FastAPI(title="RPG Multiplayer PA")
@@ -16,6 +17,11 @@ templates = Jinja2Templates(directory="templates")
 
 players: Dict[str, PlayerState] = {}
 connections: Set[WebSocket] = set()
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    init_db()
 
 
 def get_or_create_player(username: str) -> PlayerState:
@@ -50,11 +56,48 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "max_pa": MAX_ACTION_POINTS})
 
 
+@app.post("/api/register")
+async def register(
+    username: str = Form(...),
+    password: str = Form(...),
+    email: str = Form(...),
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    birth_date: str = Form(...),
+):
+    username = username.strip()
+    email = email.strip()
+    first_name = first_name.strip()
+    last_name = last_name.strip()
+    birth_date = birth_date.strip()
+
+    if not username or not password:
+        return JSONResponse({"error": "Username et mot de passe obligatoires"}, status_code=422)
+    if len(password) < 6:
+        return JSONResponse({"error": "Mot de passe trop court (6 min)"}, status_code=422)
+
+    if not create_user(
+        username=username,
+        password=password,
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        birth_date=birth_date,
+    ):
+        return JSONResponse({"error": "Ce username est déjà utilisé"}, status_code=409)
+
+    return {"message": "Inscription réussie"}
+
+
 @app.post("/api/login")
-async def login(username: str = Form(...)):
+async def login(username: str = Form(...), password: str = Form(...)):
     username = username.strip()
     if not username:
         return JSONResponse({"error": "Nom invalide"}, status_code=422)
+
+    user = get_user_by_username(username)
+    if user is None or not verify_password(password, user["password_hash"]):
+        return JSONResponse({"error": "Identifiants invalides"}, status_code=401)
 
     state = get_or_create_player(username)
     await broadcast_states()
