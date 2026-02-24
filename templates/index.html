@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPG PA Multijoueur</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="header">
+    <nav class="menu-buttons">
+      <button>Accueil</button>
+      <button>Inventaire</button>
+      <button>Quêtes</button>
+    </nav>
+
+    <section class="pa-panel" aria-label="Barre des points d'action">
+      <div class="pa-label">Points d'action</div>
+      <div class="pa-bar-wrapper">
+        <div id="paBar" class="pa-bar"></div>
+      </div>
+      <div id="paText" class="pa-text">0 / {{ max_pa }}</div>
+    </section>
+  </header>
+
+  <main>
+    <h1>Jeu multijoueur</h1>
+
+    <form id="loginForm" class="card">
+      <label for="username">Nom du joueur</label>
+      <input id="username" name="username" required minlength="2" maxlength="20" />
+      <button type="submit">Se connecter</button>
+    </form>
+
+    <section class="card">
+      <h2>Action</h2>
+      <button id="spendButton" disabled>Utiliser 1 PA</button>
+      <p id="status">Connecte-toi pour commencer.</p>
+    </section>
+
+    <section class="card">
+      <h2>Joueurs connectés</h2>
+      <ul id="players"></ul>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
