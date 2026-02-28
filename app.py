@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from random import Random
 from typing import Dict, Set
 
 from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
@@ -10,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 
 from database import create_user, get_user_by_username, init_db, verify_password
 from game_logic import MAX_ACTION_POINTS, RECHARGE_PER_HOUR, PlayerState, normalize_player_state
+from game_progress import HeroProfile, apply_adventure, hero_snapshot, outcome_for_tile
 from world_map import build_world, world_snapshot
 
 app = FastAPI(title="RPG Multiplayer PA")
@@ -17,6 +19,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 players: Dict[str, PlayerState] = {}
+heroes: Dict[str, HeroProfile] = {}
 connections: Set[WebSocket] = set()
 world = build_world()
 
@@ -30,6 +33,12 @@ def get_or_create_player(username: str) -> PlayerState:
     if username not in players:
         players[username] = PlayerState(action_points=MAX_ACTION_POINTS, last_recharge_at=datetime.now(timezone.utc))
     return normalize_player_state(players[username])
+
+
+def get_or_create_hero(username: str) -> HeroProfile:
+    if username not in heroes:
+        heroes[username] = HeroProfile()
+    return heroes[username]
 
 
 async def broadcast_states() -> None:
@@ -102,12 +111,14 @@ async def login(username: str = Form(...), password: str = Form(...)):
         return JSONResponse({"error": "Identifiants invalides"}, status_code=401)
 
     state = get_or_create_player(username)
+    hero = get_or_create_hero(username)
     await broadcast_states()
     return {
         "username": username,
         "action_points": state.action_points,
         "max_action_points": MAX_ACTION_POINTS,
         "recharge_per_hour": RECHARGE_PER_HOUR,
+        "hero": hero_snapshot(hero),
     }
 
 
@@ -129,6 +140,35 @@ async def spend_action(username: str = Form(...)):
         "username": username,
         "action_points": state.action_points,
         "max_action_points": MAX_ACTION_POINTS,
+    }
+
+
+@app.post("/api/adventure")
+async def adventure(username: str = Form(...), tile_kind: str = Form("plain")):
+    username = username.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    state = normalize_player_state(players[username])
+    if state.action_points <= 0:
+        return JSONResponse({"error": "PA insuffisants"}, status_code=400)
+
+    state.action_points -= 1
+    players[username] = state
+
+    hero = get_or_create_hero(username)
+    rng = Random(f"{username}:{datetime.now(timezone.utc).isoformat()}")
+    outcome = outcome_for_tile(tile_kind.strip(), rng)
+    details = apply_adventure(hero, outcome)
+
+    await broadcast_states()
+
+    return {
+        "username": username,
+        "action_points": state.action_points,
+        "max_action_points": MAX_ACTION_POINTS,
+        "hero": hero_snapshot(hero),
+        "outcome": details,
     }
 
 
