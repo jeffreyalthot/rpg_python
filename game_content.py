@@ -28,6 +28,11 @@ ITEM_CATALOG: dict[str, ItemMeta] = {
     "Brassards du cyclone": {"slot": "hands", "image": "/static/items/brassards_cyclone.svg", "rarity": "epique", "atk": 4, "def": 3, "vit": 3, "int": 0},
     "Grèves du gardien": {"slot": "feet", "image": "/static/items/greves_gardien.svg", "rarity": "rare", "atk": 0, "def": 5, "vit": 2, "int": 0},
     "Idole du pacte": {"slot": "trinket", "image": "/static/items/idole_pacte.svg", "rarity": "epique", "atk": 2, "def": 2, "vit": 0, "int": 6},
+    "Lance de givre": {"slot": "weapon", "image": "/static/items/lance_givre.svg", "rarity": "epique", "atk": 11, "def": 1, "vit": 1, "int": 3},
+    "Capuche de l'ombre": {"slot": "head", "image": "/static/items/capuche_ombre.svg", "rarity": "rare", "atk": 1, "def": 4, "vit": 3, "int": 1},
+    "Plastron du phénix": {"slot": "chest", "image": "/static/items/plastron_phenix.svg", "rarity": "legendaire", "atk": 2, "def": 12, "vit": 0, "int": 4},
+    "Anneau du tacticien": {"slot": "trinket", "image": "/static/items/anneau_tacticien.svg", "rarity": "epique", "atk": 1, "def": 2, "vit": 2, "int": 7},
+    "Tonicité draconique": {"slot": "consumable", "image": "/static/items/tonicite_draconique.svg", "rarity": "rare", "atk": 0, "def": 1, "vit": 4, "int": 2},
     "Elixir de zénith": {"slot": "consumable", "image": "/static/items/elixir_zenith.svg", "rarity": "rare", "atk": 0, "def": 0, "vit": 2, "int": 4},
 }
 

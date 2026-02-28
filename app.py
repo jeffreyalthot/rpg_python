@@ -22,6 +22,7 @@ templates = Jinja2Templates(directory="templates")
 
 players: Dict[str, PlayerState] = {}
 heroes: Dict[str, HeroProfile] = {}
+duel_stats: Dict[str, dict[str, int]] = {}
 player_guilds: Dict[str, str] = {}
 guild_members: Dict[str, Set[str]] = {}
 guild_messages: Dict[str, Deque[dict]] = {}
@@ -84,6 +85,29 @@ def raid_snapshot() -> dict:
     }
 
 
+def get_or_create_duel_stats(username: str) -> dict[str, int]:
+    if username not in duel_stats:
+        duel_stats[username] = {"wins": 0, "losses": 0}
+    return duel_stats[username]
+
+
+def duel_leaderboard_snapshot() -> list[dict[str, int | str]]:
+    ranking = sorted(
+        (
+            {
+                "username": name,
+                "wins": stats["wins"],
+                "losses": stats["losses"],
+                "total": stats["wins"] + stats["losses"],
+            }
+            for name, stats in duel_stats.items()
+            if stats["wins"] + stats["losses"] > 0
+        ),
+        key=lambda entry: (-entry["wins"], entry["losses"], entry["username"].lower()),
+    )
+    return ranking[:10]
+
+
 def reset_raid(next_level: int) -> None:
     raid_state["level"] = next_level
     raid_state["max_hp"] = 600 + (next_level - 1) * 140
@@ -129,6 +153,7 @@ async def broadcast_states() -> None:
         },
         "guilds": guild_snapshot,
         "raid": raid_snapshot(),
+        "duels": duel_leaderboard_snapshot(),
         "global_chat": list(global_messages),
     }
     disconnected: Set[WebSocket] = set()
@@ -242,6 +267,8 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "guild": guild_name,
         "guild_chat": guild_chat,
         "global_chat": list(global_messages),
+        "duel_stats": get_or_create_duel_stats(username),
+        "duel_leaderboard": duel_leaderboard_snapshot(),
     }
 
 
@@ -320,6 +347,12 @@ async def duel_player(username: str = Form(...), opponent: str = Form(...)):
     result = simulate_duel(attacker, defender, rng)
 
     winner = username if result["winner"] == "attacker" else opponent
+    get_or_create_duel_stats(username)
+    get_or_create_duel_stats(opponent)
+    duel_stats[winner]["wins"] += 1
+    loser = opponent if winner == username else username
+    duel_stats[loser]["losses"] += 1
+
     summary = (
         f"{username} vs {opponent}: vainqueur {winner}. "
         f"Burst VIT {username}={result['attacker_burst']} / {opponent}={result['defender_burst']}."
@@ -332,7 +365,14 @@ async def duel_player(username: str = Form(...), opponent: str = Form(...)):
         "summary": summary,
         "winner": winner,
         "combat": result,
+        "duel_stats": get_or_create_duel_stats(username),
+        "duel_leaderboard": duel_leaderboard_snapshot(),
     }
+
+
+@app.get("/api/duels/leaderboard")
+async def get_duel_leaderboard():
+    return {"leaderboard": duel_leaderboard_snapshot()}
 
 @app.post("/api/equipment/equip")
 async def equip_item(username: str = Form(...), item_name: str = Form(...)):
