@@ -25,6 +25,16 @@ heroes: Dict[str, HeroProfile] = {}
 player_guilds: Dict[str, str] = {}
 guild_members: Dict[str, Set[str]] = {}
 guild_messages: Dict[str, Deque[dict]] = {}
+global_messages: Deque[dict] = deque(
+    [
+        {
+            "author": "Système",
+            "message": "Bienvenue sur le canal mondial d'Aetheria.",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    ],
+    maxlen=40,
+)
 connections: Set[WebSocket] = set()
 world = build_world()
 MAX_GUILD_MESSAGES = 25
@@ -119,6 +129,7 @@ async def broadcast_states() -> None:
         },
         "guilds": guild_snapshot,
         "raid": raid_snapshot(),
+        "global_chat": list(global_messages),
     }
     disconnected: Set[WebSocket] = set()
     for ws in connections:
@@ -230,6 +241,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "start_position": {"x": x, "y": y},
         "guild": guild_name,
         "guild_chat": guild_chat,
+        "global_chat": list(global_messages),
     }
 
 
@@ -530,6 +542,34 @@ async def post_guild_message(username: str = Form(...), message: str = Form(...)
         "guild": guild_name,
         "chat": list(guild_messages[guild_name]),
     }
+
+
+@app.get("/api/chat/global")
+async def get_global_chat():
+    return {"chat": list(global_messages)}
+
+
+@app.post("/api/chat/global")
+async def post_global_message(username: str = Form(...), message: str = Form(...)):
+    username = username.strip()
+    content = message.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if len(content) < 2:
+        return JSONResponse({"error": "Message trop court"}, status_code=422)
+    if len(content) > 180:
+        return JSONResponse({"error": "Message trop long (180 max)"}, status_code=422)
+
+    global_messages.append(
+        {
+            "author": username,
+            "message": content,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    await broadcast_states()
+    return {"chat": list(global_messages)}
 
 
 @app.websocket("/ws")

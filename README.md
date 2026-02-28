@@ -11,6 +11,7 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - Une action **Explorer la zone** consomme 1 PA et applique des récompenses selon le type de case (XP, or, PV, objets).
 - Les statistiques du héros (niveau, inventaire) sont maintenant pilotées par le serveur à la connexion et pendant l'exploration.
 - Nouveau système de **guilde**: création/rejoindre/quitter, classement des guildes en direct et chat interne pour coordonner les joueurs.
+- Ajout d'un **canal de chat mondial** pour discuter avec toute la communauté connectée en temps réel.
 
 ## Installation
 ```bash
