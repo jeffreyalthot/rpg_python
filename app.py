@@ -27,6 +27,7 @@ player_presence: Dict[str, dict[str, str]] = {}
 player_guilds: Dict[str, str] = {}
 guild_members: Dict[str, Set[str]] = {}
 guild_messages: Dict[str, Deque[dict]] = {}
+guild_events: Dict[str, Deque[dict]] = {}
 global_messages: Deque[dict] = deque(
     [
         {
@@ -39,6 +40,7 @@ global_messages: Deque[dict] = deque(
 )
 party_board: Deque[dict] = deque(maxlen=60)
 party_entry_counter = 0
+guild_event_counter = 0
 friendships: Dict[str, Set[str]] = {}
 pending_friend_requests: Dict[str, Set[str]] = {}
 community_events: Deque[dict] = deque(
@@ -54,6 +56,8 @@ community_events: Deque[dict] = deque(
 connections: Set[WebSocket] = set()
 world = build_world()
 MAX_GUILD_MESSAGES = 25
+MAX_GUILD_EVENTS = 20
+GUILD_EVENT_RSVP_OPTIONS = {"attending", "maybe", "declined"}
 CHAT_MIN_INTERVAL_SECONDS = 3
 CHAT_BLOCKED_WORDS = ("merde", "con", "connard", "pute")
 chat_last_message_at: Dict[str, datetime] = {}
@@ -447,6 +451,28 @@ def social_snapshot(username: str) -> dict:
     }
 
 
+def guild_events_snapshot(guild_name: str | None) -> list[dict]:
+    if guild_name is None:
+        return []
+
+    events = guild_events.get(guild_name, deque())
+    ordered = sorted(events, key=lambda entry: (entry["starts_at"], entry["id"]))
+    return [
+        {
+            "id": entry["id"],
+            "title": entry["title"],
+            "note": entry["note"],
+            "starts_at": entry["starts_at"],
+            "created_by": entry["created_by"],
+            "created_at": entry["created_at"],
+            "attending_count": sum(1 for status in entry["rsvps"].values() if status == "attending"),
+            "maybe_count": sum(1 for status in entry["rsvps"].values() if status == "maybe"),
+            "declined_count": sum(1 for status in entry["rsvps"].values() if status == "declined"),
+        }
+        for entry in ordered
+    ]
+
+
 def sanitize_chat_message(message: str) -> str:
     sanitized = message
     for blocked_word in CHAT_BLOCKED_WORDS:
@@ -537,6 +563,7 @@ async def broadcast_states() -> None:
         "global_chat": list(global_messages),
         "party_board": party_board_snapshot(),
         "events": community_events_snapshot(),
+        "guild_events": {name: guild_events_snapshot(name) for name in guild_members},
         "daily": daily_challenge_snapshot(),
         "poll": poll_snapshot(),
         "commendations": commendations_snapshot(),
@@ -690,6 +717,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "start_position": {"x": x, "y": y},
         "guild": guild_name,
         "guild_chat": guild_chat,
+        "guild_events": guild_events_snapshot(guild_name),
         "global_chat": list(global_messages),
         "duel_stats": get_or_create_duel_stats(username),
         "duel_leaderboard": duel_leaderboard_snapshot(),
@@ -1106,6 +1134,7 @@ async def create_guild(username: str = Form(...), guild_name: str = Form(...)):
         ],
         maxlen=MAX_GUILD_MESSAGES,
     )
+    guild_events[guild_name] = deque(maxlen=MAX_GUILD_EVENTS)
     push_community_event("guild", f"{username} fonde la guilde {guild_name}.", actor=username)
     await broadcast_states()
 
@@ -1113,6 +1142,7 @@ async def create_guild(username: str = Form(...), guild_name: str = Form(...)):
         "guild": guild_name,
         "member_count": 1,
         "chat": list(guild_messages[guild_name]),
+        "events": guild_events_snapshot(guild_name),
     }
 
 
@@ -1144,6 +1174,7 @@ async def join_guild(username: str = Form(...), guild_name: str = Form(...)):
         "guild": guild_name,
         "member_count": len(guild_members[guild_name]),
         "chat": list(guild_messages[guild_name]),
+        "events": guild_events_snapshot(guild_name),
     }
 
 
@@ -1171,12 +1202,17 @@ async def leave_guild(username: str = Form(...)):
         )
         member_count = len(members)
         chat = list(guild_messages[guild_name])
+        for event in guild_events.get(guild_name, deque()):
+            event["rsvps"].pop(username, None)
+        events = guild_events_snapshot(guild_name)
         push_community_event("guild", f"{username} quitte la guilde {guild_name}.", actor=username)
     else:
         guild_members.pop(guild_name, None)
         guild_messages.pop(guild_name, None)
+        guild_events.pop(guild_name, None)
         member_count = 0
         chat = []
+        events = []
         push_community_event("guild", f"{username} dissout la guilde {guild_name}.", actor=username)
 
     await broadcast_states()
@@ -1184,6 +1220,94 @@ async def leave_guild(username: str = Form(...)):
         "guild": None,
         "member_count": member_count,
         "chat": chat,
+        "events": events,
+    }
+
+
+@app.post("/api/guilds/events")
+async def create_guild_event(username: str = Form(...), title: str = Form(...), starts_at: str = Form(...), note: str = Form("")):
+    global guild_event_counter
+
+    username = username.strip()
+    title = title.strip()
+    note = note.strip()
+    starts_at = starts_at.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    guild_name = player_guilds.get(username)
+    if guild_name is None or guild_name not in guild_members:
+        return JSONResponse({"error": "Vous devez rejoindre une guilde"}, status_code=409)
+    if len(title) < 4:
+        return JSONResponse({"error": "Titre trop court (4 min)"}, status_code=422)
+    if len(note) > 160:
+        return JSONResponse({"error": "Description trop longue (160 max)"}, status_code=422)
+
+    normalized_starts_at = starts_at.replace("Z", "+00:00")
+    try:
+        starts_at_dt = datetime.fromisoformat(normalized_starts_at)
+    except ValueError:
+        return JSONResponse({"error": "Date de session invalide"}, status_code=422)
+
+    if starts_at_dt.tzinfo is None:
+        starts_at_dt = starts_at_dt.replace(tzinfo=timezone.utc)
+    else:
+        starts_at_dt = starts_at_dt.astimezone(timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    if starts_at_dt < now - timedelta(minutes=5):
+        return JSONResponse({"error": "La session doit être planifiée dans le futur proche"}, status_code=422)
+    if starts_at_dt > now + timedelta(days=30):
+        return JSONResponse({"error": "Planification limitée à 30 jours"}, status_code=422)
+
+    guild_event_counter += 1
+    guild_events.setdefault(guild_name, deque(maxlen=MAX_GUILD_EVENTS)).append(
+        {
+            "id": guild_event_counter,
+            "title": title,
+            "note": note,
+            "starts_at": starts_at_dt.isoformat(),
+            "created_by": username,
+            "created_at": now.isoformat(),
+            "rsvps": {username: "attending"},
+        }
+    )
+    add_daily_progress(username, "social")
+    push_community_event("guild", f"{username} planifie '{title}' pour la guilde {guild_name}.", actor=username)
+
+    await broadcast_states()
+    return {
+        "guild": guild_name,
+        "events": guild_events_snapshot(guild_name),
+    }
+
+
+@app.post("/api/guilds/events/rsvp")
+async def rsvp_guild_event(username: str = Form(...), event_id: int = Form(...), response: str = Form(...)):
+    username = username.strip()
+    response = response.strip().lower()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    guild_name = player_guilds.get(username)
+    if guild_name is None or guild_name not in guild_members:
+        return JSONResponse({"error": "Vous devez rejoindre une guilde"}, status_code=409)
+    if response not in GUILD_EVENT_RSVP_OPTIONS:
+        return JSONResponse({"error": "Réponse RSVP invalide"}, status_code=422)
+
+    events = guild_events.get(guild_name, deque())
+    target_event = next((event for event in events if event["id"] == event_id), None)
+    if target_event is None:
+        return JSONResponse({"error": "Session de guilde introuvable"}, status_code=404)
+
+    target_event["rsvps"][username] = response
+    add_daily_progress(username, "social")
+    await broadcast_states()
+    return {
+        "guild": guild_name,
+        "events": guild_events_snapshot(guild_name),
     }
 
 
@@ -1218,6 +1342,7 @@ async def post_guild_message(username: str = Form(...), message: str = Form(...)
     return {
         "guild": guild_name,
         "chat": list(guild_messages[guild_name]),
+        "events": guild_events_snapshot(guild_name),
     }
 
 

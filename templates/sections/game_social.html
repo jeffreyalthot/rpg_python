@@ -18,6 +18,18 @@
 </article>
 
 <article class="card">
+  <h2>Calendrier de guilde</h2>
+  <p class="status">Planifiez raids et sessions coop, puis suivez les confirmations RSVP.</p>
+  <div class="guild-controls">
+    <input id="guildEventTitle" placeholder="Titre (ex: Raid Hydre NM)" maxlength="60" />
+    <input id="guildEventStartsAt" type="datetime-local" />
+    <input id="guildEventNote" placeholder="Détails: rôle, vocal, objectif" maxlength="160" />
+    <button id="createGuildEventButton" type="button">Planifier la session</button>
+  </div>
+  <ul id="guildEvents" class="activity-log"></ul>
+</article>
+
+<article class="card">
   <h2>Alliés & invitations</h2>
   <p class="status">Créez votre réseau social: invitez des joueurs et suivez qui est en ligne.</p>
   <div class="guild-controls">
