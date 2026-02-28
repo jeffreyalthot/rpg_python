@@ -88,6 +88,28 @@ contract_state = {
     "contributors": {},
     "last_rotation_at": datetime.now(timezone.utc).isoformat(),
 }
+poll_templates = [
+    {
+        "question": "Quel nouveau mode prioritaire pour la prochaine saison ?",
+        "options": ["Arène 2v2 classée", "Donjon coop narratif", "Tournoi de guildes hebdomadaire"],
+    },
+    {
+        "question": "Quel événement live voulez-vous ce week-end ?",
+        "options": ["Double XP exploration", "Boss mondial légendaire", "Foire marchande et craft"],
+    },
+    {
+        "question": "Quel système social améliorer en priorité ?",
+        "options": ["Salon vocal intégré", "Calendrier de guilde", "Mentorat nouveaux joueurs"],
+    },
+]
+poll_state = {
+    "season": 1,
+    "question": poll_templates[0]["question"],
+    "options": list(poll_templates[0]["options"]),
+    "votes": {},
+    "goal": 8,
+    "last_rotation_at": datetime.now(timezone.utc).isoformat(),
+}
 daily_template = {
     "explore": 3,
     "social": 2,
@@ -179,6 +201,49 @@ def contract_snapshot() -> dict:
         "contributors": contributors,
         "last_rotation_at": contract_state["last_rotation_at"],
     }
+
+
+def rotate_poll() -> None:
+    next_season = poll_state["season"] + 1
+    template = poll_templates[(next_season - 1) % len(poll_templates)]
+    poll_state["season"] = next_season
+    poll_state["question"] = template["question"]
+    poll_state["options"] = list(template["options"])
+    poll_state["votes"] = {}
+    poll_state["last_rotation_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def poll_snapshot(username: str | None = None) -> dict:
+    counts = [0 for _ in poll_state["options"]]
+    for choice in poll_state["votes"].values():
+        if 0 <= choice < len(counts):
+            counts[choice] += 1
+
+    total_votes = sum(counts)
+    leaderboard = [
+        {
+            "option_id": idx,
+            "label": option,
+            "votes": counts[idx],
+            "percent": round((counts[idx] / total_votes) * 100, 1) if total_votes else 0,
+        }
+        for idx, option in enumerate(poll_state["options"])
+    ]
+    leaderboard.sort(key=lambda entry: (-entry["votes"], entry["option_id"]))
+
+    payload = {
+        "season": poll_state["season"],
+        "question": poll_state["question"],
+        "goal": poll_state["goal"],
+        "total_votes": total_votes,
+        "options": leaderboard,
+        "last_rotation_at": poll_state["last_rotation_at"],
+    }
+
+    if username:
+        payload["personal_vote"] = poll_state["votes"].get(username)
+
+    return payload
 
 
 def party_board_snapshot() -> list[dict]:
@@ -469,6 +534,7 @@ async def broadcast_states() -> None:
         "party_board": party_board_snapshot(),
         "events": community_events_snapshot(),
         "daily": daily_challenge_snapshot(),
+        "poll": poll_snapshot(),
         "commendations": commendations_snapshot(),
         "moderation": chat_moderation_snapshot(),
     }
@@ -628,6 +694,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "social": social_snapshot(username),
         "presence": player_presence[username],
         "daily": daily_challenge_snapshot(username),
+        "poll": poll_snapshot(username),
         "commendations": commendations_snapshot(username),
         "moderation": chat_moderation_snapshot(username),
     }
@@ -808,6 +875,54 @@ async def get_current_contract():
 @app.get("/api/events")
 async def get_community_events():
     return {"events": community_events_snapshot()}
+
+
+@app.get("/api/community/poll")
+async def get_community_poll(username: str | None = None):
+    normalized = username.strip() if username else None
+    if normalized and normalized not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    return poll_snapshot(normalized)
+
+
+@app.post("/api/community/poll/vote")
+async def vote_community_poll(username: str = Form(...), option_id: int = Form(...)):
+    username = username.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if option_id < 0 or option_id >= len(poll_state["options"]):
+        return JSONResponse({"error": "Option de vote invalide"}, status_code=422)
+    if username in poll_state["votes"]:
+        return JSONResponse({"error": "Vous avez déjà voté pour cette saison"}, status_code=409)
+
+    poll_state["votes"][username] = option_id
+    add_daily_progress(username, "social")
+
+    hero = get_or_create_hero(username)
+    hero.gold += 5
+
+    should_rotate = len(poll_state["votes"]) >= poll_state["goal"]
+    winning_option = None
+    if should_rotate:
+        current = poll_snapshot()
+        if current["options"]:
+            winning_option = current["options"][0]["label"]
+        push_community_event(
+            "poll",
+            f"Sondage saison {poll_state['season']} clos: '{winning_option}' arrive en tête.",
+            actor=username,
+        )
+        rotate_poll()
+
+    await broadcast_states()
+
+    return {
+        "reward": {"gold": 5},
+        "hero": hero_snapshot(hero),
+        "rotated": should_rotate,
+        "winning_option": winning_option,
+        "poll": poll_snapshot(username),
+    }
 
 
 @app.get("/api/daily")

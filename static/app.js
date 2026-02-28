@@ -45,6 +45,10 @@ const dailyStatusEl = document.getElementById('dailyStatus');
 const dailyObjectivesEl = document.getElementById('dailyObjectives');
 const claimDailyButton = document.getElementById('claimDailyButton');
 const dailyRankingEl = document.getElementById('dailyRanking');
+const pollStatusEl = document.getElementById('pollStatus');
+const pollQuestionEl = document.getElementById('pollQuestion');
+const pollOptionsEl = document.getElementById('pollOptions');
+const pollResultsEl = document.getElementById('pollResults');
 const friendTargetInput = document.getElementById('friendTarget');
 const sendFriendRequestButton = document.getElementById('sendFriendRequestButton');
 const friendsListEl = document.getElementById('friendsList');
@@ -100,6 +104,7 @@ let partyBoardEntries = [];
 let communityEvents = [];
 let socialState = { friends: [], incoming_requests: [], outgoing_requests: [] };
 let dailyState = null;
+let pollState = null;
 let moderationState = null;
 
 const hero = {
@@ -233,6 +238,7 @@ function renderMenu() {
         communityEvents = [];
         socialState = { friends: [], incoming_requests: [], outgoing_requests: [] };
         dailyState = null;
+        pollState = null;
         moderationState = null;
         renderGuildStatus();
         renderGuildChat();
@@ -243,6 +249,7 @@ function renderMenu() {
         renderRaid();
         renderContracts();
         renderDailyChallenge();
+        renderCommunityPoll();
         renderMenu();
         renderActionPanel();
         addLog('Vous avez quitté le monde.');
@@ -728,6 +735,97 @@ function renderDailyChallenge() {
     li.textContent = `${index + 1}. ${entry.username} — ${entry.completions} défi(s) validé(s)`;
     dailyRankingEl.appendChild(li);
   });
+}
+
+
+function renderCommunityPoll() {
+  if (!pollStatusEl || !pollQuestionEl || !pollOptionsEl || !pollResultsEl) {
+    return;
+  }
+
+  if (!pollState) {
+    pollStatusEl.textContent = 'Sondage communautaire indisponible.';
+    pollQuestionEl.textContent = 'Chargement du conseil...';
+    pollOptionsEl.innerHTML = '';
+    pollResultsEl.innerHTML = '<li>Aucun vote pour le moment.</li>';
+    return;
+  }
+
+  pollQuestionEl.textContent = `Saison ${pollState.season} — ${pollState.question}`;
+
+  const hasVoted = pollState.personal_vote !== null && pollState.personal_vote !== undefined;
+  const remaining = Math.max(0, Number(pollState.goal || 0) - Number(pollState.total_votes || 0));
+  if (!username) {
+    pollStatusEl.textContent = 'Connectez-vous pour voter et gagner une petite récompense.';
+  } else if (hasVoted) {
+    pollStatusEl.textContent = `Vote enregistré. Rotation dans ${remaining} vote(s).`;
+  } else {
+    pollStatusEl.textContent = `Votre voix compte: encore ${remaining} vote(s) avant la clôture du sondage.`;
+  }
+
+  pollOptionsEl.innerHTML = '';
+  (pollState.options || []).slice().sort((a, b) => a.option_id - b.option_id).forEach((option) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = option.label;
+    button.disabled = !username || hasVoted;
+    if (hasVoted && Number(pollState.personal_vote) === option.option_id) {
+      button.classList.add('is-selected');
+      button.textContent = `✓ ${option.label}`;
+    }
+    button.addEventListener('click', async () => {
+      await voteCommunityPoll(option.option_id);
+    });
+    pollOptionsEl.appendChild(button);
+  });
+
+  pollResultsEl.innerHTML = '';
+  if (!pollState.options?.length) {
+    pollResultsEl.innerHTML = '<li>Aucune option active.</li>';
+    return;
+  }
+
+  pollState.options.forEach((option, index) => {
+    const li = document.createElement('li');
+    li.textContent = `${index + 1}. ${option.label} — ${option.votes} vote(s) (${option.percent}%)`;
+    pollResultsEl.appendChild(li);
+  });
+}
+
+async function refreshCommunityPoll() {
+  const query = username ? `?username=${encodeURIComponent(username)}` : '';
+  const response = await fetch(`/api/community/poll${query}`);
+  if (!response.ok) {
+    return;
+  }
+  pollState = await response.json();
+  renderCommunityPoll();
+}
+
+async function voteCommunityPoll(optionId) {
+  if (!username) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('option_id', String(optionId));
+
+  const response = await fetch('/api/community/poll/vote', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Vote impossible.';
+    return;
+  }
+
+  syncHero(data.hero);
+  renderHeroStats();
+  renderCommunityPoll();
+  const message = data.rotated
+    ? `Vote pris en compte (+${data.reward.gold} or). Nouveau sondage lancé !`
+    : `Vote pris en compte (+${data.reward.gold} or).`;
+  statusEl.textContent = message;
+  addLog(message);
 }
 
 async function claimDailyReward() {
@@ -1623,6 +1721,10 @@ ws.onmessage = (event) => {
       const personal = data.daily.personal || dailyState?.personal;
       dailyState = personal ? { ...data.daily, personal } : data.daily;
     }
+    if (data.poll) {
+      const personalVote = data.poll.personal_vote ?? pollState?.personal_vote;
+      pollState = personalVote !== undefined ? { ...data.poll, personal_vote: personalVote } : data.poll;
+    }
     duelLeaderboard = data.duels || duelLeaderboard;
     globalChatMessages = data.global_chat || globalChatMessages;
     moderationState = data.moderation || moderationState;
@@ -1636,6 +1738,7 @@ ws.onmessage = (event) => {
     renderDuelStats();
     renderFriendsPanel();
     renderDailyChallenge();
+    renderCommunityPoll();
   }
 };
 
@@ -1687,6 +1790,7 @@ loginForm.addEventListener('submit', async (event) => {
   duelLeaderboard = data.duel_leaderboard || duelLeaderboard;
   socialState = data.social || socialState;
   dailyState = data.daily || dailyState;
+  pollState = data.poll || pollState;
   syncProfile(data.profile);
 
   if (data.start_position) {
@@ -1714,8 +1818,10 @@ loginForm.addEventListener('submit', async (event) => {
   renderRaid();
   renderContracts();
   renderDailyChallenge();
+  renderCommunityPoll();
   refreshGuilds();
   refreshDailyChallenge();
+  refreshCommunityPoll();
   addLog(`Bienvenue ${username}, ton aventure commence.`);
 });
 
@@ -1810,6 +1916,7 @@ renderCommunityEvents();
 renderRaid();
 renderContracts();
 renderDailyChallenge();
+renderCommunityPoll();
 renderDuelOpponents();
 renderDuelLog();
 renderFriendsPanel();
@@ -1820,7 +1927,9 @@ refreshGuilds();
 refreshRaid();
 refreshContracts();
 refreshDailyChallenge();
+refreshCommunityPoll();
 setInterval(refreshWorld, 60000);
 setInterval(refreshRaid, 15000);
 setInterval(refreshContracts, 20000);
 setInterval(refreshDailyChallenge, 20000);
+setInterval(refreshCommunityPoll, 25000);
