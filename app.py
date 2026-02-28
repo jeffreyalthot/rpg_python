@@ -23,6 +23,7 @@ templates = Jinja2Templates(directory="templates")
 players: Dict[str, PlayerState] = {}
 heroes: Dict[str, HeroProfile] = {}
 duel_stats: Dict[str, dict[str, int]] = {}
+player_presence: Dict[str, dict[str, str]] = {}
 player_guilds: Dict[str, str] = {}
 guild_members: Dict[str, Set[str]] = {}
 guild_messages: Dict[str, Deque[dict]] = {}
@@ -93,6 +94,8 @@ daily_state = {
     "completions": {},
     "last_reset_at": datetime.now(timezone.utc).isoformat(),
 }
+PRESENCE_ALLOWED_STATUSES = {"online", "looking_for_group", "raiding", "dueling", "afk"}
+PRESENCE_NOTE_MAX_LENGTH = 60
 
 
 def get_village_position(village_name: str) -> tuple[int, int]:
@@ -290,6 +293,7 @@ async def on_startup() -> None:
 def get_or_create_player(username: str) -> PlayerState:
     if username not in players:
         players[username] = PlayerState(action_points=MAX_ACTION_POINTS, last_recharge_at=datetime.now(timezone.utc))
+    player_presence.setdefault(username, {"status": "online", "note": ""})
     return normalize_player_state(players[username])
 
 
@@ -308,7 +312,11 @@ def ensure_social_profile(username: str) -> None:
 def social_snapshot(username: str) -> dict:
     ensure_social_profile(username)
     friends = [
-        {"username": friend, "online": friend in players}
+        {
+            "username": friend,
+            "online": friend in players,
+            "presence": player_presence.get(friend, {"status": "offline", "note": ""}),
+        }
         for friend in sorted(friendships[username], key=str.lower)
     ]
     incoming = sorted(pending_friend_requests.get(username, set()), key=str.lower)
@@ -371,6 +379,7 @@ async def broadcast_states() -> None:
         "players": {
             name: {
                 "action_points": normalize_player_state(state).action_points,
+                "presence": player_presence.get(name, {"status": "online", "note": ""}),
             }
             for name, state in players.items()
         },
@@ -511,6 +520,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         return JSONResponse({"error": "Identifiants invalides"}, status_code=401)
 
     state = get_or_create_player(username)
+    player_presence[username] = {"status": "online", "note": ""}
     hero = get_or_create_hero(username)
     ensure_social_profile(username)
     ensure_daily_progress(username)
@@ -536,7 +546,31 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "party_board": party_board_snapshot(),
         "events": community_events_snapshot(),
         "social": social_snapshot(username),
+        "presence": player_presence[username],
         "daily": daily_challenge_snapshot(username),
+    }
+
+
+@app.post("/api/presence")
+async def update_presence(username: str = Form(...), status: str = Form(...), note: str = Form("")):
+    username = username.strip()
+    status = status.strip().lower()
+    note = note.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if status not in PRESENCE_ALLOWED_STATUSES:
+        return JSONResponse({"error": "Statut invalide"}, status_code=422)
+    if len(note) > PRESENCE_NOTE_MAX_LENGTH:
+        return JSONResponse({"error": f"Note trop longue ({PRESENCE_NOTE_MAX_LENGTH} max)"}, status_code=422)
+
+    player_presence[username] = {"status": status, "note": note}
+    add_daily_progress(username, "social")
+    await broadcast_states()
+    return {
+        "username": username,
+        "presence": player_presence[username],
+        "social": social_snapshot(username),
     }
 
 
