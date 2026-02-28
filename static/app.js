@@ -33,6 +33,9 @@ const globalMessageInput = document.getElementById('globalMessage');
 const sendGlobalMessageButton = document.getElementById('sendGlobalMessageButton');
 const partyActivityInput = document.getElementById('partyActivity');
 const partyMessageInput = document.getElementById('partyMessage');
+const partyRolesInput = document.getElementById('partyRoles');
+const partyMinLevelInput = document.getElementById('partyMinLevel');
+const partyMaxMembersInput = document.getElementById('partyMaxMembers');
 const postPartyButton = document.getElementById('postPartyButton');
 const clearPartyButton = document.getElementById('clearPartyButton');
 const partyBoardEl = document.getElementById('partyBoard');
@@ -597,15 +600,27 @@ function renderPartyBoard() {
       ? entry.interested_players.includes(username)
       : false;
 
+    const minLevel = Number(entry.min_level || 1);
+    const maxMembers = Number(entry.max_members || 4);
+    const roles = entry.roles || 'Tous rôles';
+    const isFull = Boolean(entry.is_full);
+
     const info = document.createElement('span');
-    info.textContent = `[${time}] ${entry.author} • ${entry.activity} — ${entry.message} (intéressés: ${interestedCount})`;
+    info.textContent = `[${time}] ${entry.author} • ${entry.activity} [${roles}] — ${entry.message} (niv. min ${minLevel}, ${interestedCount}/${maxMembers})`;
     li.appendChild(info);
+
+    if (isFull && !isInterested) {
+      const fullBadge = document.createElement('strong');
+      fullBadge.textContent = ' COMPLET';
+      li.appendChild(fullBadge);
+    }
 
     if (username && entry.id) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'inline-action';
       button.textContent = isInterested ? 'Se retirer' : 'Rejoindre';
+      button.disabled = isFull && !isInterested;
       button.addEventListener('click', async () => {
         await togglePartyInterest(entry.id);
       });
@@ -637,12 +652,15 @@ function renderCommunityEvents() {
 }
 
 async function postPartyBoardEntry() {
-  if (!username || !partyActivityInput || !partyMessageInput) {
+  if (!username || !partyActivityInput || !partyMessageInput || !partyRolesInput || !partyMinLevelInput || !partyMaxMembersInput) {
     return;
   }
 
   const activity = partyActivityInput.value.trim();
   const message = partyMessageInput.value.trim();
+  const roles = partyRolesInput.value.trim();
+  const minLevel = Number(partyMinLevelInput.value || '1');
+  const maxMembers = Number(partyMaxMembersInput.value || '4');
   if (activity.length < 3) {
     statusEl.textContent = 'L\'activité doit contenir au moins 3 caractères.';
     return;
@@ -651,11 +669,26 @@ async function postPartyBoardEntry() {
     statusEl.textContent = 'Le message de recrutement doit contenir au moins 6 caractères.';
     return;
   }
+  if (roles.length < 3) {
+    statusEl.textContent = 'Précisez les rôles recherchés (3 caractères minimum).';
+    return;
+  }
+  if (Number.isNaN(minLevel) || minLevel < 1 || minLevel > 60) {
+    statusEl.textContent = 'Le niveau minimum doit être compris entre 1 et 60.';
+    return;
+  }
+  if (Number.isNaN(maxMembers) || maxMembers < 2 || maxMembers > 8) {
+    statusEl.textContent = 'La taille du groupe doit être comprise entre 2 et 8.';
+    return;
+  }
 
   const formData = new FormData();
   formData.append('username', username);
   formData.append('activity', activity);
   formData.append('message', message);
+  formData.append('roles', roles);
+  formData.append('min_level', String(minLevel));
+  formData.append('max_members', String(maxMembers));
 
   const response = await fetch('/api/party-board', { method: 'POST', body: formData });
   const data = await response.json();
@@ -667,6 +700,9 @@ async function postPartyBoardEntry() {
   partyBoardEntries = data.entries || [];
   partyActivityInput.value = '';
   partyMessageInput.value = '';
+  partyRolesInput.value = 'Tous rôles';
+  partyMinLevelInput.value = '1';
+  partyMaxMembersInput.value = '4';
   renderPartyBoard();
   addLog('Annonce de groupe publiée.');
 }

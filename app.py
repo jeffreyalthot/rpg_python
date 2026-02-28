@@ -160,9 +160,13 @@ def party_board_snapshot() -> list[dict]:
             "author": entry["author"],
             "activity": entry["activity"],
             "message": entry["message"],
+            "roles": entry["roles"],
+            "min_level": entry["min_level"],
+            "max_members": entry["max_members"],
             "created_at": entry["created_at"],
             "interested_count": len(entry["interested_players"]),
             "interested_players": sorted(entry["interested_players"]),
+            "is_full": len(entry["interested_players"]) >= entry["max_members"],
         }
         for entry in party_board
     ]
@@ -846,11 +850,18 @@ async def post_party_board_entry(
     username: str = Form(...),
     activity: str = Form(...),
     message: str = Form(...),
+    roles: str = Form("Tous rôles"),
+    min_level: int = Form(1),
+    max_members: int = Form(4),
 ):
     global party_entry_counter
     username = username.strip()
     activity = activity.strip()
     content = message.strip()
+    roles = roles if isinstance(roles, str) else "Tous rôles"
+    roles = roles.strip()
+    min_level = min_level if isinstance(min_level, int) else 1
+    max_members = max_members if isinstance(max_members, int) else 4
 
     if username not in players:
         return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
@@ -862,6 +873,14 @@ async def post_party_board_entry(
         return JSONResponse({"error": "Message trop court (6 minimum)"}, status_code=422)
     if len(content) > 220:
         return JSONResponse({"error": "Message trop long (220 max)"}, status_code=422)
+    if len(roles) < 3:
+        return JSONResponse({"error": "Les rôles doivent contenir au moins 3 caractères"}, status_code=422)
+    if len(roles) > 60:
+        return JSONResponse({"error": "Les rôles sont limités à 60 caractères"}, status_code=422)
+    if min_level < 1 or min_level > 60:
+        return JSONResponse({"error": "Niveau minimum invalide (1 à 60)"}, status_code=422)
+    if max_members < 2 or max_members > 8:
+        return JSONResponse({"error": "Taille du groupe invalide (2 à 8)"}, status_code=422)
 
     now = datetime.now(timezone.utc).isoformat()
     party_entry_counter += 1
@@ -871,6 +890,9 @@ async def post_party_board_entry(
             "author": username,
             "activity": activity,
             "message": content,
+            "roles": roles,
+            "min_level": min_level,
+            "max_members": max_members,
             "created_at": now,
             "interested_players": {username},
         }
@@ -912,6 +934,8 @@ async def mark_party_interest(username: str = Form(...), entry_id: int = Form(..
         interested.discard(username)
         action = "removed"
     else:
+        if len(interested) >= entry["max_members"]:
+            return JSONResponse({"error": "Ce groupe est déjà complet"}, status_code=409)
         interested.add(username)
         action = "added"
         if username != entry["author"]:
