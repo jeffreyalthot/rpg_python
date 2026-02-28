@@ -19,6 +19,16 @@ ITEM_CATALOG: dict[str, ItemMeta] = {
     "Bouclier runique": {"slot": "hands", "image": "/static/items/bouclier_runique.svg", "rarity": "epique", "atk": 1, "def": 8, "vit": -1, "int": 3},
     "Bottes foudroyantes": {"slot": "feet", "image": "/static/items/bottes_foudroyantes.svg", "rarity": "epique", "atk": 0, "def": 2, "vit": 7, "int": 0},
     "Orbe du stratège": {"slot": "trinket", "image": "/static/items/orbe_stratege.svg", "rarity": "legendaire", "atk": 0, "def": 2, "vit": 2, "int": 8},
+    "Dague de braise": {"slot": "weapon", "image": "/static/items/dague_braise.svg", "rarity": "rare", "atk": 7, "def": 0, "vit": 3, "int": 1},
+    "Masse du colosse": {"slot": "weapon", "image": "/static/items/masse_colosse.svg", "rarity": "epique", "atk": 12, "def": 2, "vit": -2, "int": 0},
+    "Diadème stellaire": {"slot": "head", "image": "/static/items/diademe_stellaire.svg", "rarity": "legendaire", "atk": 1, "def": 3, "vit": 1, "int": 9},
+    "Heaume du rempart": {"slot": "head", "image": "/static/items/heaume_rempart.svg", "rarity": "rare", "atk": 0, "def": 6, "vit": -1, "int": 1},
+    "Cuirasse du bastion": {"slot": "chest", "image": "/static/items/cuirasse_bastion.svg", "rarity": "epique", "atk": 0, "def": 11, "vit": -2, "int": 2},
+    "Manteau des marées": {"slot": "back", "image": "/static/items/manteau_marees.svg", "rarity": "rare", "atk": 1, "def": 3, "vit": 2, "int": 2},
+    "Brassards du cyclone": {"slot": "hands", "image": "/static/items/brassards_cyclone.svg", "rarity": "epique", "atk": 4, "def": 3, "vit": 3, "int": 0},
+    "Grèves du gardien": {"slot": "feet", "image": "/static/items/greves_gardien.svg", "rarity": "rare", "atk": 0, "def": 5, "vit": 2, "int": 0},
+    "Idole du pacte": {"slot": "trinket", "image": "/static/items/idole_pacte.svg", "rarity": "epique", "atk": 2, "def": 2, "vit": 0, "int": 6},
+    "Elixir de zénith": {"slot": "consumable", "image": "/static/items/elixir_zenith.svg", "rarity": "rare", "atk": 0, "def": 0, "vit": 2, "int": 4},
 }
 
 DEFAULT_EQUIPMENT = {

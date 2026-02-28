@@ -117,7 +117,15 @@ def outcome_for_tile(tile_kind: str, rng: Random) -> AdventureOutcome:
             xp,
             gold,
             hp_delta,
-            item_found=rng.choice([None, "Rune ancienne", "Arc du rôdeur", "Casque d'avant-garde", "Lame spectrale"]),
+            item_found=rng.choice([
+                None,
+                "Rune ancienne",
+                "Arc du rôdeur",
+                "Casque d'avant-garde",
+                "Lame spectrale",
+                "Masse du colosse",
+                "Brassards du cyclone",
+            ]),
         )
 
     if tile_kind == "merchant":
@@ -128,7 +136,16 @@ def outcome_for_tile(tile_kind: str, rng: Random) -> AdventureOutcome:
             xp,
             gold,
             0,
-            item_found=rng.choice([None, "Talisman poli", "Gants du faucon", "Bottes de vent", "Orbe du stratège"]),
+            item_found=rng.choice([
+                None,
+                "Talisman poli",
+                "Gants du faucon",
+                "Bottes de vent",
+                "Orbe du stratège",
+                "Dague de braise",
+                "Elixir de zénith",
+                "Idole du pacte",
+            ]),
         )
 
     if tile_kind in {"village", "starting_village"}:
@@ -140,13 +157,33 @@ def outcome_for_tile(tile_kind: str, rng: Random) -> AdventureOutcome:
             xp,
             gold,
             hp_delta,
-            item_found=rng.choice([None, "Ration de voyage", "Armure de l'aube", "Bouclier runique"]),
+            item_found=rng.choice([
+                None,
+                "Ration de voyage",
+                "Armure de l'aube",
+                "Bouclier runique",
+                "Manteau des marées",
+                "Grèves du gardien",
+                "Heaume du rempart",
+            ]),
         )
 
     xp = rng.randint(9, 20)
     gold = rng.randint(3, 10)
     hp_delta = -rng.randint(0, 6)
-    return AdventureOutcome("Exploration des plaines", xp, gold, hp_delta, item_found=rng.choice([None, "Herbes médicinales", "Bottes foudroyantes"]))
+    return AdventureOutcome(
+        "Exploration des plaines",
+        xp,
+        gold,
+        hp_delta,
+        item_found=rng.choice([
+            None,
+            "Herbes médicinales",
+            "Bottes foudroyantes",
+            "Cuirasse du bastion",
+            "Diadème stellaire",
+        ]),
+    )
 
 
 def apply_adventure(hero: HeroProfile, outcome: AdventureOutcome) -> dict:

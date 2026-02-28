@@ -236,6 +236,11 @@ input {
   .world-card {
     grid-column: span 1;
   }
+
+
+  .item-filters {
+    grid-template-columns: 1fr;
+  }
 }
 
 
@@ -310,3 +315,15 @@ select {
 .inventory-icon { width: 28px; height: 28px; object-fit: cover; border-radius: .3rem; vertical-align: middle; margin-right: .35rem; border: 1px solid #475569; }
 #inventory li { margin-bottom: .35rem; }
 #inventory small { display: block; color: var(--muted); }
+
+.item-filters {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: .45rem;
+  margin-bottom: .45rem;
+}
+
+.item-card.rarity-commun { border-color: #475569; }
+.item-card.rarity-rare { border-color: #0ea5e9; }
+.item-card.rarity-epique { border-color: #a855f7; }
+.item-card.rarity-legendaire { border-color: #f59e0b; }
