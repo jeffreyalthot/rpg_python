@@ -8,6 +8,8 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - Un bouton "Utiliser 1 PA" permet de dépenser des points.
 - Tous les clients connectés voient les mises à jour en temps réel.
 - La barre de PA est affichée **en haut à gauche**, juste sous les boutons de navigation dans l'en-tête.
+- Une action **Explorer la zone** consomme 1 PA et applique des récompenses selon le type de case (XP, or, PV, objets).
+- Les statistiques du héros (niveau, inventaire) sont maintenant pilotées par le serveur à la connexion et pendant l'exploration.
 
 ## Installation
 ```bash

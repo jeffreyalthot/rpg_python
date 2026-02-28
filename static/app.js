@@ -1,6 +1,7 @@
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
 const spendButton = document.getElementById('spendButton');
+const exploreButton = document.getElementById('exploreButton');
 const quickBattleButton = document.getElementById('quickBattle');
 const statusEl = document.getElementById('status');
 const playersEl = document.getElementById('players');
@@ -142,6 +143,7 @@ function renderMenu() {
         username = null;
         renderPA(0);
         spendButton.disabled = true;
+        exploreButton.disabled = true;
         quickBattleButton.disabled = true;
         statusEl.textContent = 'Déconnecté.';
         renderMenu();
@@ -158,7 +160,21 @@ function renderPA(current) {
   paBar.style.width = `${(safe / maxPA) * 100}%`;
   paText.textContent = `${safe} / ${maxPA}`;
   spendButton.disabled = !username || safe <= 0;
+  exploreButton.disabled = !username || safe <= 0;
   quickBattleButton.disabled = !username || safe <= 0;
+}
+
+function syncHero(serverHero) {
+  if (!serverHero) {
+    return;
+  }
+
+  hero.level = serverHero.level;
+  hero.xp = serverHero.xp;
+  hero.gold = serverHero.gold;
+  hero.hp = serverHero.hp;
+  hero.maxHp = serverHero.max_hp;
+  hero.inventory = [...serverHero.inventory];
 }
 
 function renderHeroStats() {
@@ -393,6 +409,45 @@ async function spendAction() {
   return true;
 }
 
+async function exploreCurrentTile() {
+  if (!username) {
+    return;
+  }
+
+  const tile = getTileInfo(hero.x, hero.y);
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('tile_kind', tile.kind);
+
+  const response = await fetch('/api/adventure', {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Exploration impossible';
+    return;
+  }
+
+  renderPA(data.action_points);
+  syncHero(data.hero);
+  renderHeroStats();
+  renderInventory();
+
+  const hpText = data.outcome.hp_delta >= 0 ? `+${data.outcome.hp_delta}` : `${data.outcome.hp_delta}`;
+  let summary = `${data.outcome.summary}: +${data.outcome.xp_gain} XP, +${data.outcome.gold_gain} or, PV ${hpText}.`;
+  if (data.outcome.item_found) {
+    summary += ` Objet trouvé: ${data.outcome.item_found}.`;
+  }
+  if (data.outcome.level_ups > 0) {
+    summary += ` Niveau supérieur x${data.outcome.level_ups} !`;
+  }
+
+  statusEl.textContent = summary;
+  addLog(summary);
+}
+
 function runQuickBattle() {
   const win = Math.random() > 0.45;
   const xpGain = win ? 30 : 12;
@@ -473,6 +528,7 @@ loginForm.addEventListener('submit', async (event) => {
 
   username = data.username;
   maxPA = data.max_action_points;
+  syncHero(data.hero);
 
   if (worldState?.starting_villages?.length) {
     const start = worldState.starting_villages[0];
@@ -484,6 +540,7 @@ loginForm.addEventListener('submit', async (event) => {
   renderPA(data.action_points);
   statusEl.textContent = `Bienvenue ${username}. Régénération: ${data.recharge_per_hour} PA/h.`;
   spendButton.disabled = false;
+  exploreButton.disabled = false;
   quickBattleButton.disabled = false;
   renderMenu();
   renderHeroStats();
@@ -497,6 +554,10 @@ spendButton.addEventListener('click', async () => {
   if (ok) {
     addLog('Vous avez utilisé 1 PA pour une action stratégique.');
   }
+});
+
+exploreButton.addEventListener('click', async () => {
+  await exploreCurrentTile();
 });
 
 quickBattleButton.addEventListener('click', async () => {
