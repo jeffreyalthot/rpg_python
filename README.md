@@ -21,6 +21,7 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - Extension du catalogue avec de nouveaux objets (images SVG + stats) pour enrichir les builds multijoueur.
 - Nouveau **défi quotidien communautaire**: progression en exploration/social/combat, récompense de fidélité et classement des joueurs les plus réguliers.
 - Modération du chat intégrée: filtre de mots toxiques + anti-spam (cooldown 3s et blocage des doublons) pour sécuriser les canaux communautaires.
+- Nouveau système de **recommandations sociales**: chaque joueur peut valoriser jusqu'à 3 coéquipiers par jour, avec classement communautaire anti-abus pour encourager le fair-play.
 
 ## Installation
 ```bash
