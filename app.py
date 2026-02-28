@@ -37,6 +37,16 @@ global_messages: Deque[dict] = deque(
     maxlen=40,
 )
 party_board: Deque[dict] = deque(maxlen=60)
+community_events: Deque[dict] = deque(
+    [
+        {
+            "category": "system",
+            "message": "Les chroniques communautaires sont actives.",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    ],
+    maxlen=80,
+)
 connections: Set[WebSocket] = set()
 world = build_world()
 MAX_GUILD_MESSAGES = 25
@@ -144,6 +154,21 @@ def party_board_snapshot() -> list[dict]:
     return list(party_board)
 
 
+def community_events_snapshot() -> list[dict]:
+    return list(community_events)
+
+
+def push_community_event(category: str, message: str, actor: str | None = None) -> None:
+    payload = {
+        "category": category,
+        "message": message,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if actor:
+        payload["actor"] = actor
+    community_events.appendleft(payload)
+
+
 def rotate_contracts() -> None:
     next_season = contract_state["season"] + 1
     template = contracts_pool[(next_season - 1) % len(contracts_pool)]
@@ -205,6 +230,7 @@ async def broadcast_states() -> None:
         "duels": duel_leaderboard_snapshot(),
         "global_chat": list(global_messages),
         "party_board": party_board_snapshot(),
+        "events": community_events_snapshot(),
     }
     disconnected: Set[WebSocket] = set()
     for ws in connections:
@@ -355,6 +381,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "duel_stats": get_or_create_duel_stats(username),
         "duel_leaderboard": duel_leaderboard_snapshot(),
         "party_board": party_board_snapshot(),
+        "events": community_events_snapshot(),
     }
 
 
@@ -438,6 +465,7 @@ async def duel_player(username: str = Form(...), opponent: str = Form(...)):
     duel_stats[winner]["wins"] += 1
     loser = opponent if winner == username else username
     duel_stats[loser]["losses"] += 1
+    push_community_event("duel", f"{winner} remporte un duel contre {loser}.", actor=winner)
 
     summary = (
         f"{username} vs {opponent}: vainqueur {winner}. "
@@ -503,6 +531,11 @@ async def get_current_contract():
     return contract_snapshot()
 
 
+@app.get("/api/events")
+async def get_community_events():
+    return {"events": community_events_snapshot()}
+
+
 @app.post("/api/contracts/contribute")
 async def contribute_contract(username: str = Form(...)):
     username = username.strip()
@@ -537,6 +570,7 @@ async def contribute_contract(username: str = Form(...)):
             hero.level += 1
             hero.max_hp += 10
             hero.hp = hero.max_hp
+        push_community_event("contract", f"{username} finalise le contrat '{reward['contract']}' pour toute la saison.", actor=username)
         rotate_contracts()
 
     await broadcast_states()
@@ -581,6 +615,11 @@ async def attack_raid_boss(username: str = Form(...)):
             "name": raid_state["name"],
             "level": raid_state["level"],
         }
+        push_community_event(
+            "raid",
+            f"{username} et la guilde {guild_name} terrassent {defeated_boss['name']} (Niv.{defeated_boss['level']}).",
+            actor=username,
+        )
         reset_raid(raid_state["level"] + 1)
 
     await broadcast_states()
@@ -620,6 +659,7 @@ async def create_guild(username: str = Form(...), guild_name: str = Form(...)):
         ],
         maxlen=MAX_GUILD_MESSAGES,
     )
+    push_community_event("guild", f"{username} fonde la guilde {guild_name}.", actor=username)
     await broadcast_states()
 
     return {
@@ -650,6 +690,7 @@ async def join_guild(username: str = Form(...), guild_name: str = Form(...)):
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
     )
+    push_community_event("guild", f"{username} rejoint la guilde {guild_name}.", actor=username)
     await broadcast_states()
 
     return {
@@ -683,11 +724,13 @@ async def leave_guild(username: str = Form(...)):
         )
         member_count = len(members)
         chat = list(guild_messages[guild_name])
+        push_community_event("guild", f"{username} quitte la guilde {guild_name}.", actor=username)
     else:
         guild_members.pop(guild_name, None)
         guild_messages.pop(guild_name, None)
         member_count = 0
         chat = []
+        push_community_event("guild", f"{username} dissout la guilde {guild_name}.", actor=username)
 
     await broadcast_states()
     return {
@@ -717,6 +760,7 @@ async def post_guild_message(username: str = Form(...), message: str = Form(...)
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
     )
+    await broadcast_states()
     return {
         "guild": guild_name,
         "chat": list(guild_messages[guild_name]),
@@ -786,6 +830,7 @@ async def post_party_board_entry(
             "created_at": now,
         }
     )
+    push_community_event("party", f"{username} ouvre un groupe: {activity}.", actor=username)
 
     await broadcast_states()
     return {"entries": party_board_snapshot()}
