@@ -29,6 +29,7 @@
         <button id="exploreButton" disabled>Explorer la zone</button>
         <button id="quickBattle" disabled>Lancer un combat rapide</button>
       </div>
+      <p class="status">La VIT détermine le nombre d'attaques enchaînées avant la riposte adverse.</p>
     </section>
 
     <section class="dashboard-grid">
@@ -136,6 +137,17 @@
         <ul id="guildRanking" class="styled-list"></ul>
         <h3>Chat guilde</h3>
         <ul id="guildChat" class="activity-log"></ul>
+      </article>
+
+
+      <article class="card">
+        <h2>Duel JcJ (multijoueur)</h2>
+        <p>Choisissez un adversaire connecté. Le ratio de VIT détermine les combos d'attaque avant contre-attaque.</p>
+        <div class="guild-controls">
+          <select id="duelOpponent"></select>
+          <button id="duelButton" type="button" disabled>Défier (1 PA)</button>
+        </div>
+        <ul id="duelLog" class="activity-log"></ul>
       </article>
 
       <article class="card">

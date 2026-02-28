@@ -43,6 +43,9 @@ const noseSelect = document.getElementById('nose');
 const earsSelect = document.getElementById('ears');
 const skinToneSelect = document.getElementById('skinTone');
 const startingVillageSelect = document.getElementById('startingVillage');
+const duelOpponentSelect = document.getElementById('duelOpponent');
+const duelButton = document.getElementById('duelButton');
+const duelLogEl = document.getElementById('duelLog');
 
 let username = null;
 let maxPA = 20;
@@ -52,6 +55,7 @@ let currentGuild = null;
 let guildChatMessages = [];
 let raidState = null;
 let allItems = [];
+let connectedPlayers = [];
 
 const hero = {
   level: 1,
@@ -65,6 +69,7 @@ const hero = {
   inventory: ['Épée rouillée', 'Potion de soin', 'Cape de voyage'],
   equipment: { head: null, chest: null, weapon: 'Épée rouillée', back: 'Cape de voyage', hands: null, feet: null, trinket: null },
   profile: { hair: 'Court', eyes: 'Marron', mouth: 'Neutre', nose: 'Droit', ears: 'Rondes', skin_tone: 'Clair', starting_village: 'Village départ 1' },
+  stats: { atk: 10, def: 7, vit: 6, int: 6 },
   quests: [
     'Explorer 3 villages voisins',
     'Vaincre 2 ennemis en zone de combat',
@@ -211,6 +216,7 @@ function syncHero(serverHero) {
   hero.maxHp = serverHero.max_hp;
   hero.inventory = [...serverHero.inventory];
   hero.equipment = { ...hero.equipment, ...(serverHero.equipment || {}) };
+  hero.stats = { ...hero.stats, ...(serverHero.stats || {}) };
 }
 
 function syncProfile(profile) {
@@ -225,6 +231,8 @@ function renderHeroStats() {
     <li><strong>XP:</strong> ${hero.xp} / 100</li>
     <li><strong>PV:</strong> ${hero.hp} / ${hero.maxHp}</li>
     <li><strong>Or:</strong> ${hero.gold}</li>
+    <li><strong>ATK:</strong> ${hero.stats.atk} | <strong>DEF:</strong> ${hero.stats.def}</li>
+    <li><strong>VIT:</strong> ${hero.stats.vit} | <strong>INT:</strong> ${hero.stats.int}</li>
     <li><strong>Position:</strong> (${hero.x}, ${hero.y}) - ${hero.location}</li>
     <li><strong>Village de départ:</strong> ${hero.profile.starting_village}</li>
   `;
@@ -276,8 +284,9 @@ function renderInventory() {
   inventoryEl.innerHTML = '';
   hero.inventory.forEach((item) => {
     const li = document.createElement('li');
-    li.textContent = item;
     const itemMeta = allItems.find((entry) => entry.name === item);
+    const stats = itemMeta ? `ATK+${itemMeta.atk} DEF+${itemMeta.def} VIT+${itemMeta.vit} INT+${itemMeta.int}` : '';
+    li.innerHTML = itemMeta ? `<img src='${itemMeta.image}' alt='${item}' class='inventory-icon'> <strong>${item}</strong> <small>${stats}</small>` : item;
     if (itemMeta?.slot && itemMeta.slot !== 'consumable' && username) {
       const button = buttonLabel('Équiper');
       button.addEventListener('click', async () => equipItem(item));
@@ -293,7 +302,7 @@ function renderItemCatalog() {
   allItems.forEach((item) => {
     const card = document.createElement('article');
     card.className = 'item-card';
-    card.innerHTML = `<img src='${item.image}' alt='${item.name}'><h4>${item.name}</h4><p>${item.slot} • ${item.rarity}</p>`;
+    card.innerHTML = `<img src='${item.image}' alt='${item.name}'><h4>${item.name}</h4><p>${item.slot} • ${item.rarity}</p><p>ATK+${item.atk} DEF+${item.def}</p><p>VIT+${item.vit} INT+${item.int}</p>`;
     itemCatalogEl.appendChild(card);
   });
 }
@@ -545,6 +554,7 @@ async function sendGuildMessage() {
 
 function renderPlayers(players) {
   playersEl.innerHTML = '';
+  connectedPlayers = Object.keys(players);
   Object.entries(players).forEach(([name, state]) => {
     const li = document.createElement('li');
     li.textContent = `${name}: ${state.action_points} PA`;
@@ -554,6 +564,60 @@ function renderPlayers(players) {
       renderPA(state.action_points);
     }
   });
+  renderDuelOpponents();
+}
+
+
+function renderDuelOpponents() {
+  if (!duelOpponentSelect) return;
+  duelOpponentSelect.innerHTML = '';
+
+  const opponents = connectedPlayers.filter((name) => name !== username);
+  if (!opponents.length) {
+    duelOpponentSelect.innerHTML = '<option value="">Aucun adversaire disponible</option>';
+    duelButton.disabled = true;
+    return;
+  }
+
+  opponents.forEach((name) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    duelOpponentSelect.appendChild(opt);
+  });
+  duelButton.disabled = !username;
+}
+
+function renderDuelLog(entries = []) {
+  if (!duelLogEl) return;
+  duelLogEl.innerHTML = '';
+  entries.slice(0, 8).forEach((line) => {
+    const li = document.createElement('li');
+    li.textContent = line;
+    duelLogEl.appendChild(li);
+  });
+}
+
+async function runDuel() {
+  if (!username || !duelOpponentSelect?.value) {
+    statusEl.textContent = 'Aucun adversaire sélectionné.';
+    return;
+  }
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('opponent', duelOpponentSelect.value);
+  const response = await fetch('/api/combat/duel', { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Duel impossible';
+    return;
+  }
+
+  renderPA(data.action_points);
+  statusEl.textContent = data.summary;
+  addLog(data.summary);
+  renderDuelLog(data.combat.log || []);
 }
 
 function drawPoints(ctx, world, points, color, size) {
@@ -944,6 +1008,10 @@ exploreButton.addEventListener('click', async () => {
 });
 
 quickBattleButton.addEventListener('click', async () => {
+  if (duelOpponentSelect?.value) {
+    await runDuel();
+    return;
+  }
   const ok = await spendAction();
   if (ok) {
     runQuickBattle();
@@ -971,6 +1039,10 @@ raidAttackButton?.addEventListener('click', async () => {
   await attackRaidBoss();
 });
 
+duelButton?.addEventListener('click', async () => {
+  await runDuel();
+});
+
 renderMenu();
 renderHeroStats();
 renderInventory();
@@ -981,6 +1053,8 @@ renderActionPanel();
 renderGuildStatus();
 renderGuildChat();
 renderRaid();
+renderDuelOpponents();
+renderDuelLog();
 addLog('Le portail d\'Aetheria est ouvert.');
 loadOptions();
 refreshWorld();

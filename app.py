@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from database import create_user, get_user_by_username, init_db, verify_password
 from game_content import CHARACTER_OPTIONS, ITEM_CATALOG
 from game_logic import MAX_ACTION_POINTS, RECHARGE_PER_HOUR, PlayerState, normalize_player_state
-from game_progress import HeroProfile, apply_adventure, hero_snapshot, outcome_for_tile
+from game_progress import HeroProfile, apply_adventure, hero_snapshot, outcome_for_tile, simulate_duel
 from world_map import build_world, world_snapshot
 
 app = FastAPI(title="RPG Multiplayer PA")
@@ -282,6 +282,45 @@ async def adventure(username: str = Form(...), tile_kind: str = Form("plain")):
         "outcome": details,
     }
 
+
+
+
+@app.post("/api/combat/duel")
+async def duel_player(username: str = Form(...), opponent: str = Form(...)):
+    username = username.strip()
+    opponent = opponent.strip()
+
+    if username not in players or opponent not in players:
+        return JSONResponse({"error": "Les deux joueurs doivent être connectés"}, status_code=404)
+    if username == opponent:
+        return JSONResponse({"error": "Impossible de se battre contre soi-même"}, status_code=422)
+
+    state = normalize_player_state(players[username])
+    if state.action_points <= 0:
+        return JSONResponse({"error": "PA insuffisants"}, status_code=400)
+
+    state.action_points -= 1
+    players[username] = state
+
+    attacker = get_or_create_hero(username)
+    defender = get_or_create_hero(opponent)
+    rng = Random(f"duel:{username}:{opponent}:{datetime.now(timezone.utc).isoformat()}")
+    result = simulate_duel(attacker, defender, rng)
+
+    winner = username if result["winner"] == "attacker" else opponent
+    summary = (
+        f"{username} vs {opponent}: vainqueur {winner}. "
+        f"Burst VIT {username}={result['attacker_burst']} / {opponent}={result['defender_burst']}."
+    )
+
+    await broadcast_states()
+
+    return {
+        "action_points": state.action_points,
+        "summary": summary,
+        "winner": winner,
+        "combat": result,
+    }
 
 @app.post("/api/equipment/equip")
 async def equip_item(username: str = Form(...), item_name: str = Form(...)):
