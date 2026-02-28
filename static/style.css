@@ -237,3 +237,21 @@ input {
     grid-column: span 1;
   }
 }
+
+
+.guild-controls {
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+}
+
+.guild-buttons {
+  display: flex;
+  gap: .45rem;
+  flex-wrap: wrap;
+}
+
+.guild-buttons button,
+#sendGuildMessageButton {
+  flex: 1 1 auto;
+}
