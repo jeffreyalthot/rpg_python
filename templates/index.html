@@ -20,58 +20,93 @@
   </header>
 
   <main>
-    <h1>Jeu multijoueur</h1>
-
-    <form id="loginForm" class="card">
-      <h2>Connexion</h2>
-      <label for="username">Username</label>
-      <input id="username" name="username" required minlength="2" maxlength="20" />
-
-      <label for="password">Mot de passe</label>
-      <input id="password" name="password" type="password" required minlength="6" />
-
-      <button type="submit">Login</button>
-    </form>
-
-    <form id="registerForm" class="card">
-      <h2>Inscription</h2>
-      <label for="registerUsername">Username unique</label>
-      <input id="registerUsername" name="username" required minlength="2" maxlength="20" />
-
-      <label for="registerPassword">Mot de passe</label>
-      <input id="registerPassword" name="password" type="password" required minlength="6" />
-
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" required />
-
-      <label for="firstName">Prénom</label>
-      <input id="firstName" name="first_name" required />
-
-      <label for="lastName">Nom</label>
-      <input id="lastName" name="last_name" required />
-
-      <label for="birthDate">Date de naissance</label>
-      <input id="birthDate" name="birth_date" type="date" required />
-
-      <button type="submit">Inscription</button>
-    </form>
-
-    <section class="card">
-      <h2>Action</h2>
-      <button id="spendButton" disabled>Utiliser 1 PA</button>
-      <p id="status">Connecte-toi pour commencer.</p>
+    <section class="hero card">
+      <h1>Chroniques d'Aetheria</h1>
+      <p>Explore, combats, échange avec les marchands et fais progresser ton héros dans un univers multijoueur vivant.</p>
+      <p id="status" class="status">Connecte-toi pour commencer ton aventure.</p>
+      <div class="hero-actions">
+        <button id="spendButton" disabled>Utiliser 1 PA</button>
+        <button id="quickBattle" disabled>Lancer un combat rapide</button>
+      </div>
     </section>
 
-    <section class="card">
-      <h2>Joueurs connectés</h2>
-      <ul id="players"></ul>
-    </section>
+    <section class="dashboard-grid">
+      <article class="card" id="authCard">
+        <h2>Authentification</h2>
+        <div class="auth-layout">
+          <form id="loginForm">
+            <h3>Connexion</h3>
+            <label for="username">Username</label>
+            <input id="username" name="username" required minlength="2" maxlength="20" />
 
-    <section class="card">
-      <h2>Carte du monde</h2>
-      <p>Monde de 5000 x 5000 cases, avec villages, champs de bataille et marchands ambulants.</p>
-      <canvas id="worldMap" width="500" height="500" aria-label="Carte du monde"></canvas>
-      <div id="worldStats" class="world-stats"></div>
+            <label for="password">Mot de passe</label>
+            <input id="password" name="password" type="password" required minlength="6" />
+
+            <button type="submit">Login</button>
+          </form>
+
+          <form id="registerForm">
+            <h3>Inscription</h3>
+            <label for="registerUsername">Username unique</label>
+            <input id="registerUsername" name="username" required minlength="2" maxlength="20" />
+
+            <label for="registerPassword">Mot de passe</label>
+            <input id="registerPassword" name="password" type="password" required minlength="6" />
+
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required />
+
+            <label for="firstName">Prénom</label>
+            <input id="firstName" name="first_name" required />
+
+            <label for="lastName">Nom</label>
+            <input id="lastName" name="last_name" required />
+
+            <label for="birthDate">Date de naissance</label>
+            <input id="birthDate" name="birth_date" type="date" required />
+
+            <button type="submit">Inscription</button>
+          </form>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>État du héros</h2>
+        <ul id="heroStats" class="stats-list"></ul>
+      </article>
+
+      <article class="card">
+        <h2>Joueurs connectés</h2>
+        <ul id="players"></ul>
+      </article>
+
+      <article class="card">
+        <h2>Inventaire</h2>
+        <ul id="inventory" class="styled-list"></ul>
+      </article>
+
+      <article class="card">
+        <h2>Quêtes actives</h2>
+        <ul id="quests" class="styled-list"></ul>
+      </article>
+
+      <article class="card">
+        <h2>Journal d'aventure</h2>
+        <ul id="activityLog" class="activity-log"></ul>
+      </article>
+
+      <article class="card world-card">
+        <h2>Carte du monde</h2>
+        <p>Monde de 5000 x 5000 cases, avec villages, champs de bataille et marchands ambulants.</p>
+        <canvas id="worldMap" width="500" height="500" aria-label="Carte du monde"></canvas>
+        <div class="legend">
+          <span><i class="dot start"></i> Village de départ</span>
+          <span><i class="dot village"></i> Village</span>
+          <span><i class="dot battle"></i> Zone de combat</span>
+          <span><i class="dot merchant"></i> Marchand</span>
+        </div>
+        <div id="worldStats" class="world-stats"></div>
+      </article>
     </section>
   </main>
 
