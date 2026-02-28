@@ -255,3 +255,11 @@ input {
 #sendGuildMessageButton {
   flex: 1 1 auto;
 }
+
+.raid-bar-wrapper {
+  margin-top: 0.5rem;
+}
+
+.raid-bar {
+  background: linear-gradient(90deg, #ef4444, #f97316);
+}
