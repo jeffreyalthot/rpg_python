@@ -39,3 +39,19 @@ def test_join_missing_guild_returns_404():
     response = asyncio.run(app.join_guild(username="solo", guild_name="Introuvable"))
 
     assert response.status_code == 404
+
+
+
+def test_guild_chat_filters_bad_words():
+    app.players.clear()
+    app.player_guilds.clear()
+    app.guild_members.clear()
+    app.guild_messages.clear()
+    app.chat_last_message_at.clear()
+    app.chat_last_message_text.clear()
+
+    app.get_or_create_player("alpha")
+    asyncio.run(app.create_guild(username="alpha", guild_name="Sentinels"))
+
+    chatted = asyncio.run(app.post_guild_message(username="alpha", message="Un con bloque le pont"))
+    assert chatted["chat"][-1]["message"] == "Un *** bloque le pont"

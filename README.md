@@ -20,6 +20,7 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - Nouveau **tableau de contrats communautaires**: tous les joueurs peuvent contribuer en PA pour débloquer des récompenses de saison et un classement de contributeurs en direct.
 - Extension du catalogue avec de nouveaux objets (images SVG + stats) pour enrichir les builds multijoueur.
 - Nouveau **défi quotidien communautaire**: progression en exploration/social/combat, récompense de fidélité et classement des joueurs les plus réguliers.
+- Modération du chat intégrée: filtre de mots toxiques + anti-spam (cooldown 3s et blocage des doublons) pour sécuriser les canaux communautaires.
 
 ## Installation
 ```bash
