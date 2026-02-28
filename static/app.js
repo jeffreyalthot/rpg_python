@@ -468,7 +468,26 @@ function renderPartyBoard() {
   partyBoardEntries.slice(0, 12).forEach((entry) => {
     const li = document.createElement('li');
     const time = new Date(entry.created_at).toLocaleTimeString();
-    li.textContent = `[${time}] ${entry.author} • ${entry.activity} — ${entry.message}`;
+    const interestedCount = Number(entry.interested_count || 0);
+    const isInterested = Array.isArray(entry.interested_players) && username
+      ? entry.interested_players.includes(username)
+      : false;
+
+    const info = document.createElement('span');
+    info.textContent = `[${time}] ${entry.author} • ${entry.activity} — ${entry.message} (intéressés: ${interestedCount})`;
+    li.appendChild(info);
+
+    if (username && entry.id) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'inline-action';
+      button.textContent = isInterested ? 'Se retirer' : 'Rejoindre';
+      button.addEventListener('click', async () => {
+        await togglePartyInterest(entry.id);
+      });
+      li.appendChild(button);
+    }
+
     partyBoardEl.appendChild(li);
   });
 }
@@ -543,6 +562,29 @@ async function clearPartyBoardEntries() {
   partyBoardEntries = data.entries || [];
   renderPartyBoard();
   addLog('Vos annonces de groupe ont été supprimées.');
+}
+
+async function togglePartyInterest(entryId) {
+  if (!username) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('entry_id', String(entryId));
+
+  const response = await fetch('/api/party-board/interest', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Impossible de mettre à jour l'annonce.';
+    return;
+  }
+
+  partyBoardEntries = data.entries || [];
+  renderPartyBoard();
+  const label = data.action === 'added' ? 'Vous rejoignez un groupe.' : 'Vous quittez ce groupe.';
+  statusEl.textContent = label;
+  addLog(label);
 }
 
 async function sendGlobalMessage() {
