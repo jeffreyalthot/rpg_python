@@ -53,6 +53,8 @@ const startingVillageSelect = document.getElementById('startingVillage');
 const duelOpponentSelect = document.getElementById('duelOpponent');
 const duelButton = document.getElementById('duelButton');
 const duelLogEl = document.getElementById('duelLog');
+const duelLeaderboardEl = document.getElementById('duelLeaderboard');
+const duelPersonalStatsEl = document.getElementById('duelPersonalStats');
 
 let username = null;
 let maxPA = 20;
@@ -65,6 +67,8 @@ let globalChatMessages = [];
 let allItems = [];
 let filteredItems = [];
 let connectedPlayers = [];
+let duelLeaderboard = [];
+let myDuelStats = { wins: 0, losses: 0 };
 
 const hero = {
   level: 1,
@@ -699,6 +703,26 @@ function renderDuelLog(entries = []) {
   });
 }
 
+function renderDuelStats() {
+  if (duelPersonalStatsEl) {
+    duelPersonalStatsEl.textContent = `Bilan personnel: ${myDuelStats.wins} victoire(s) / ${myDuelStats.losses} défaite(s).`;
+  }
+
+  if (!duelLeaderboardEl) return;
+
+  duelLeaderboardEl.innerHTML = '';
+  if (!duelLeaderboard.length) {
+    duelLeaderboardEl.innerHTML = '<li>Aucun duel classé enregistré pour l'instant.</li>';
+    return;
+  }
+
+  duelLeaderboard.forEach((entry, index) => {
+    const li = document.createElement('li');
+    li.textContent = `${index + 1}. ${entry.username} — ${entry.wins}V / ${entry.losses}D (${entry.total} combats)`;
+    duelLeaderboardEl.appendChild(li);
+  });
+}
+
 async function runDuel() {
   if (!username || !duelOpponentSelect?.value) {
     statusEl.textContent = 'Aucun adversaire sélectionné.';
@@ -719,6 +743,9 @@ async function runDuel() {
   statusEl.textContent = data.summary;
   addLog(data.summary);
   renderDuelLog(data.combat.log || []);
+  myDuelStats = data.duel_stats || myDuelStats;
+  duelLeaderboard = data.duel_leaderboard || duelLeaderboard;
+  renderDuelStats();
 }
 
 function drawPoints(ctx, world, points, color, size) {
@@ -1042,9 +1069,11 @@ ws.onmessage = (event) => {
     renderPlayers(data.players);
     renderGuildRanking(data.guilds || []);
     raidState = data.raid || raidState;
+    duelLeaderboard = data.duels || duelLeaderboard;
     globalChatMessages = data.global_chat || globalChatMessages;
     renderRaid();
     renderGlobalChat();
+    renderDuelStats();
   }
 };
 
@@ -1089,6 +1118,8 @@ loginForm.addEventListener('submit', async (event) => {
   currentGuild = data.guild || null;
   guildChatMessages = data.guild_chat || [];
   globalChatMessages = data.global_chat || [];
+  myDuelStats = data.duel_stats || myDuelStats;
+  duelLeaderboard = data.duel_leaderboard || duelLeaderboard;
   syncProfile(data.profile);
 
   if (data.start_position) {

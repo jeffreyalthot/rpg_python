@@ -12,6 +12,8 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - Les statistiques du héros (niveau, inventaire) sont maintenant pilotées par le serveur à la connexion et pendant l'exploration.
 - Nouveau système de **guilde**: création/rejoindre/quitter, classement des guildes en direct et chat interne pour coordonner les joueurs.
 - Ajout d'un **canal de chat mondial** pour discuter avec toute la communauté connectée en temps réel.
+- Nouveau **classement JcJ saisonnier** avec suivi des victoires/défaites et top 10 diffusé en temps réel.
+- Extension du catalogue avec de nouveaux objets (images SVG + stats) pour enrichir les builds multijoueur.
 
 ## Installation
 ```bash
