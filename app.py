@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from collections import deque
 from random import Random
-from typing import Dict, Set
+from typing import Deque, Dict, Set
 
 from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -20,8 +21,12 @@ templates = Jinja2Templates(directory="templates")
 
 players: Dict[str, PlayerState] = {}
 heroes: Dict[str, HeroProfile] = {}
+player_guilds: Dict[str, str] = {}
+guild_members: Dict[str, Set[str]] = {}
+guild_messages: Dict[str, Deque[dict]] = {}
 connections: Set[WebSocket] = set()
 world = build_world()
+MAX_GUILD_MESSAGES = 25
 
 
 @app.on_event("startup")
@@ -42,6 +47,14 @@ def get_or_create_hero(username: str) -> HeroProfile:
 
 
 async def broadcast_states() -> None:
+    guild_snapshot = [
+        {
+            "name": name,
+            "member_count": len(members),
+        }
+        for name, members in sorted(guild_members.items(), key=lambda item: (-len(item[1]), item[0].lower()))
+    ]
+
     payload = {
         "type": "snapshot",
         "players": {
@@ -50,6 +63,7 @@ async def broadcast_states() -> None:
             }
             for name, state in players.items()
         },
+        "guilds": guild_snapshot,
     }
     disconnected: Set[WebSocket] = set()
     for ws in connections:
@@ -113,12 +127,17 @@ async def login(username: str = Form(...), password: str = Form(...)):
     state = get_or_create_player(username)
     hero = get_or_create_hero(username)
     await broadcast_states()
+    guild_name = player_guilds.get(username)
+    guild_chat = list(guild_messages[guild_name]) if guild_name in guild_messages else []
+
     return {
         "username": username,
         "action_points": state.action_points,
         "max_action_points": MAX_ACTION_POINTS,
         "recharge_per_hour": RECHARGE_PER_HOUR,
         "hero": hero_snapshot(hero),
+        "guild": guild_name,
+        "guild_chat": guild_chat,
     }
 
 
@@ -177,6 +196,144 @@ async def adventure(username: str = Form(...), tile_kind: str = Form("plain")):
 @app.get("/api/world")
 async def get_world():
     return world_snapshot(world)
+
+
+@app.get("/api/guilds")
+async def get_guilds():
+    ranking = [
+        {"name": name, "member_count": len(members)}
+        for name, members in sorted(guild_members.items(), key=lambda item: (-len(item[1]), item[0].lower()))
+    ]
+    return {"guilds": ranking}
+
+
+@app.post("/api/guilds/create")
+async def create_guild(username: str = Form(...), guild_name: str = Form(...)):
+    username = username.strip()
+    guild_name = guild_name.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if len(guild_name) < 3:
+        return JSONResponse({"error": "Le nom de guilde doit contenir au moins 3 caractères"}, status_code=422)
+    if guild_name in guild_members:
+        return JSONResponse({"error": "Cette guilde existe déjà"}, status_code=409)
+    if username in player_guilds:
+        return JSONResponse({"error": "Quittez votre guilde actuelle avant d'en créer une"}, status_code=409)
+
+    guild_members[guild_name] = {username}
+    player_guilds[username] = guild_name
+    guild_messages[guild_name] = deque(
+        [
+            {
+                "author": "Système",
+                "message": f"{username} a fondé la guilde {guild_name}.",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ],
+        maxlen=MAX_GUILD_MESSAGES,
+    )
+    await broadcast_states()
+
+    return {
+        "guild": guild_name,
+        "member_count": 1,
+        "chat": list(guild_messages[guild_name]),
+    }
+
+
+@app.post("/api/guilds/join")
+async def join_guild(username: str = Form(...), guild_name: str = Form(...)):
+    username = username.strip()
+    guild_name = guild_name.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if guild_name not in guild_members:
+        return JSONResponse({"error": "Guilde introuvable"}, status_code=404)
+    if username in player_guilds:
+        return JSONResponse({"error": "Vous êtes déjà dans une guilde"}, status_code=409)
+
+    guild_members[guild_name].add(username)
+    player_guilds[username] = guild_name
+    guild_messages.setdefault(guild_name, deque(maxlen=MAX_GUILD_MESSAGES)).append(
+        {
+            "author": "Système",
+            "message": f"{username} rejoint la guilde.",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    await broadcast_states()
+
+    return {
+        "guild": guild_name,
+        "member_count": len(guild_members[guild_name]),
+        "chat": list(guild_messages[guild_name]),
+    }
+
+
+@app.post("/api/guilds/leave")
+async def leave_guild(username: str = Form(...)):
+    username = username.strip()
+    guild_name = player_guilds.get(username)
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if guild_name is None:
+        return JSONResponse({"error": "Vous n'appartenez à aucune guilde"}, status_code=409)
+
+    members = guild_members[guild_name]
+    members.discard(username)
+    player_guilds.pop(username, None)
+
+    if members:
+        guild_messages.setdefault(guild_name, deque(maxlen=MAX_GUILD_MESSAGES)).append(
+            {
+                "author": "Système",
+                "message": f"{username} quitte la guilde.",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        member_count = len(members)
+        chat = list(guild_messages[guild_name])
+    else:
+        guild_members.pop(guild_name, None)
+        guild_messages.pop(guild_name, None)
+        member_count = 0
+        chat = []
+
+    await broadcast_states()
+    return {
+        "guild": None,
+        "member_count": member_count,
+        "chat": chat,
+    }
+
+
+@app.post("/api/guilds/chat")
+async def post_guild_message(username: str = Form(...), message: str = Form(...)):
+    username = username.strip()
+    content = message.strip()
+    guild_name = player_guilds.get(username)
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if guild_name is None or guild_name not in guild_members:
+        return JSONResponse({"error": "Vous devez rejoindre une guilde"}, status_code=409)
+    if len(content) < 2:
+        return JSONResponse({"error": "Message trop court"}, status_code=422)
+
+    guild_messages.setdefault(guild_name, deque(maxlen=MAX_GUILD_MESSAGES)).append(
+        {
+            "author": username,
+            "message": content,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return {
+        "guild": guild_name,
+        "chat": list(guild_messages[guild_name]),
+    }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

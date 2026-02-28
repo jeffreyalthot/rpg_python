@@ -19,11 +19,22 @@ const tileImageEl = document.getElementById('tileImage');
 const tileTitleEl = document.getElementById('tileTitle');
 const tileDescriptionEl = document.getElementById('tileDescription');
 const tileActionsEl = document.getElementById('tileActions');
+const guildStatusEl = document.getElementById('guildStatus');
+const guildNameInput = document.getElementById('guildName');
+const createGuildButton = document.getElementById('createGuildButton');
+const joinGuildButton = document.getElementById('joinGuildButton');
+const leaveGuildButton = document.getElementById('leaveGuildButton');
+const guildRankingEl = document.getElementById('guildRanking');
+const guildChatEl = document.getElementById('guildChat');
+const guildMessageInput = document.getElementById('guildMessage');
+const sendGuildMessageButton = document.getElementById('sendGuildMessageButton');
 
 let username = null;
 let maxPA = 20;
 let worldState = null;
 let worldPositions = new Map();
+let currentGuild = null;
+let guildChatMessages = [];
 
 const hero = {
   level: 1,
@@ -146,6 +157,10 @@ function renderMenu() {
         exploreButton.disabled = true;
         quickBattleButton.disabled = true;
         statusEl.textContent = 'Déconnecté.';
+        currentGuild = null;
+        guildChatMessages = [];
+        renderGuildStatus();
+        renderGuildChat();
         renderMenu();
         renderActionPanel();
         addLog('Vous avez quitté le monde.');
@@ -203,6 +218,160 @@ function renderQuests() {
     li.textContent = quest;
     questsEl.appendChild(li);
   });
+}
+
+
+function renderGuildRanking(guilds = []) {
+  if (!guildRankingEl) {
+    return;
+  }
+
+  guildRankingEl.innerHTML = '';
+  if (!guilds.length) {
+    const li = document.createElement('li');
+    li.textContent = 'Aucune guilde active pour le moment.';
+    guildRankingEl.appendChild(li);
+    return;
+  }
+
+  guilds.slice(0, 8).forEach((guild, index) => {
+    const li = document.createElement('li');
+    li.textContent = `${index + 1}. ${guild.name} — ${guild.member_count} membre(s)`;
+    guildRankingEl.appendChild(li);
+  });
+}
+
+function renderGuildChat() {
+  if (!guildChatEl) {
+    return;
+  }
+
+  guildChatEl.innerHTML = '';
+  if (!guildChatMessages.length) {
+    const li = document.createElement('li');
+    li.textContent = currentGuild ? 'Aucun message pour le moment.' : 'Rejoignez une guilde pour débloquer le chat.';
+    guildChatEl.appendChild(li);
+    return;
+  }
+
+  [...guildChatMessages].reverse().forEach((entry) => {
+    const li = document.createElement('li');
+    const time = new Date(entry.created_at).toLocaleTimeString();
+    li.textContent = `[${time}] ${entry.author}: ${entry.message}`;
+    guildChatEl.appendChild(li);
+  });
+}
+
+function renderGuildStatus() {
+  if (!guildStatusEl) {
+    return;
+  }
+
+  if (!username) {
+    guildStatusEl.textContent = 'Connectez-vous pour rejoindre une guilde.';
+    return;
+  }
+
+  guildStatusEl.textContent = currentGuild
+    ? `Guilde active: ${currentGuild}. Coordination en temps réel disponible.`
+    : 'Aucune guilde: créez-en une ou rejoignez vos alliés.';
+}
+
+async function refreshGuilds() {
+  const response = await fetch('/api/guilds');
+  if (!response.ok) {
+    return;
+  }
+  const data = await response.json();
+  renderGuildRanking(data.guilds || []);
+}
+
+async function createOrJoinGuild(mode) {
+  if (!username || !guildNameInput) {
+    return;
+  }
+
+  const guildName = guildNameInput.value.trim();
+  if (guildName.length < 3) {
+    statusEl.textContent = 'Le nom de guilde doit contenir au moins 3 caractères.';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('guild_name', guildName);
+
+  const endpoint = mode === 'create' ? '/api/guilds/create' : '/api/guilds/join';
+  const response = await fetch(endpoint, { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Action de guilde impossible.';
+    return;
+  }
+
+  currentGuild = data.guild;
+  guildChatMessages = data.chat || [];
+  renderGuildStatus();
+  renderGuildChat();
+  refreshGuilds();
+  statusEl.textContent = `Vous êtes maintenant dans la guilde ${currentGuild}.`;
+  addLog(`Guilde: ${mode === 'create' ? 'création' : 'adhésion'} ${currentGuild}.`);
+}
+
+async function leaveGuild() {
+  if (!username) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+
+  const response = await fetch('/api/guilds/leave', { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Impossible de quitter la guilde.';
+    return;
+  }
+
+  currentGuild = null;
+  guildChatMessages = [];
+  renderGuildStatus();
+  renderGuildChat();
+  refreshGuilds();
+  statusEl.textContent = 'Vous avez quitté la guilde.';
+  addLog('Sortie de guilde confirmée.');
+}
+
+async function sendGuildMessage() {
+  if (!username || !guildMessageInput) {
+    return;
+  }
+
+  const content = guildMessageInput.value.trim();
+  if (content.length < 2) {
+    statusEl.textContent = 'Le message doit contenir au moins 2 caractères.';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('message', content);
+
+  const response = await fetch('/api/guilds/chat', { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Message non envoyé.';
+    return;
+  }
+
+  currentGuild = data.guild;
+  guildChatMessages = data.chat || [];
+  guildMessageInput.value = '';
+  renderGuildStatus();
+  renderGuildChat();
 }
 
 function renderPlayers(players) {
@@ -488,6 +657,7 @@ ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
   if (data.type === 'snapshot') {
     renderPlayers(data.players);
+    renderGuildRanking(data.guilds || []);
   }
 };
 
@@ -529,6 +699,8 @@ loginForm.addEventListener('submit', async (event) => {
   username = data.username;
   maxPA = data.max_action_points;
   syncHero(data.hero);
+  currentGuild = data.guild || null;
+  guildChatMessages = data.guild_chat || [];
 
   if (worldState?.starting_villages?.length) {
     const start = worldState.starting_villages[0];
@@ -546,6 +718,9 @@ loginForm.addEventListener('submit', async (event) => {
   renderHeroStats();
   renderWorld(worldState);
   renderActionPanel();
+  renderGuildStatus();
+  renderGuildChat();
+  refreshGuilds();
   addLog(`Bienvenue ${username}, ton aventure commence.`);
 });
 
@@ -567,11 +742,31 @@ quickBattleButton.addEventListener('click', async () => {
   }
 });
 
+
+createGuildButton?.addEventListener('click', async () => {
+  await createOrJoinGuild('create');
+});
+
+joinGuildButton?.addEventListener('click', async () => {
+  await createOrJoinGuild('join');
+});
+
+leaveGuildButton?.addEventListener('click', async () => {
+  await leaveGuild();
+});
+
+sendGuildMessageButton?.addEventListener('click', async () => {
+  await sendGuildMessage();
+});
+
 renderMenu();
 renderHeroStats();
 renderInventory();
 renderQuests();
 renderActionPanel();
+renderGuildStatus();
+renderGuildChat();
 addLog('Le portail d\'Aetheria est ouvert.');
 refreshWorld();
+refreshGuilds();
 setInterval(refreshWorld, 60000);

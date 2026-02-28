@@ -10,6 +10,7 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - La barre de PA est affichée **en haut à gauche**, juste sous les boutons de navigation dans l'en-tête.
 - Une action **Explorer la zone** consomme 1 PA et applique des récompenses selon le type de case (XP, or, PV, objets).
 - Les statistiques du héros (niveau, inventaire) sont maintenant pilotées par le serveur à la connexion et pendant l'exploration.
+- Nouveau système de **guilde**: création/rejoindre/quitter, classement des guildes en direct et chat interne pour coordonner les joueurs.
 
 ## Installation
 ```bash

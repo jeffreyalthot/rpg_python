@@ -92,6 +92,25 @@
       </article>
 
       <article class="card">
+        <h2>Guilde & communication</h2>
+        <p id="guildStatus" class="status">Connectez-vous pour rejoindre une guilde.</p>
+        <div class="guild-controls">
+          <input id="guildName" placeholder="Nom de guilde" minlength="3" maxlength="30" />
+          <div class="guild-buttons">
+            <button id="createGuildButton" type="button">Créer</button>
+            <button id="joinGuildButton" type="button">Rejoindre</button>
+            <button id="leaveGuildButton" type="button">Quitter</button>
+          </div>
+          <input id="guildMessage" placeholder="Message de guilde" maxlength="140" />
+          <button id="sendGuildMessageButton" type="button">Envoyer au chat guilde</button>
+        </div>
+        <h3>Top guildes</h3>
+        <ul id="guildRanking" class="styled-list"></ul>
+        <h3>Chat guilde</h3>
+        <ul id="guildChat" class="activity-log"></ul>
+      </article>
+
+      <article class="card">
         <h2>Journal d'aventure</h2>
         <ul id="activityLog" class="activity-log"></ul>
       </article>
