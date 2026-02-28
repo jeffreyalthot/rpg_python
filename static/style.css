@@ -85,3 +85,17 @@ input {
   background: #0b1220;
   color: var(--text);
 }
+
+#worldMap {
+  width: 100%;
+  max-width: 500px;
+  border: 1px solid #475569;
+  border-radius: .4rem;
+  background: #020617;
+}
+
+.world-stats {
+  margin-top: .8rem;
+  font-size: .9rem;
+  line-height: 1.5;
+}

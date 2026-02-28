@@ -6,6 +6,8 @@ const playersEl = document.getElementById('players');
 const paBar = document.getElementById('paBar');
 const paText = document.getElementById('paText');
 const menuButtons = document.getElementById('menuButtons');
+const worldMap = document.getElementById('worldMap');
+const worldStats = document.getElementById('worldStats');
 
 let username = null;
 let maxPA = 20;
@@ -69,6 +71,52 @@ function renderPlayers(players) {
       renderPA(state.action_points);
     }
   });
+}
+
+function drawPoints(ctx, world, points, color, size) {
+  ctx.fillStyle = color;
+  points.forEach((point) => {
+    const x = Math.round((point.x / (world.width - 1)) * (ctx.canvas.width - 1));
+    const y = Math.round((point.y / (world.height - 1)) * (ctx.canvas.height - 1));
+    ctx.fillRect(x, y, size, size);
+  });
+}
+
+function renderWorld(world) {
+  if (!worldMap || !worldStats) {
+    return;
+  }
+
+  const ctx = worldMap.getContext('2d');
+  ctx.clearRect(0, 0, worldMap.width, worldMap.height);
+
+  drawPoints(ctx, world, world.villages, '#22c55e', 2);
+  drawPoints(ctx, world, world.starting_villages, '#0ea5e9', 3);
+  drawPoints(ctx, world, world.battlefields, '#ef4444', 2);
+  drawPoints(ctx, world, world.merchants, '#facc15', 2);
+
+  worldStats.innerHTML = `
+    <strong>Dimensions:</strong> ${world.width} x ${world.height} cases<br>
+    <strong>Villages de départ:</strong> ${world.starting_villages.length}<br>
+    <strong>Autres villages:</strong> ${world.villages.length}<br>
+    <strong>Champs de bataille:</strong> ${world.battlefields.length}<br>
+    <strong>Marchands ambulants:</strong> ${world.merchants.length} (déplacement: 1 case / heure)
+  `;
+}
+
+async function refreshWorld() {
+  if (!worldMap) {
+    return;
+  }
+
+  const response = await fetch('/api/world');
+  if (!response.ok) {
+    worldStats.textContent = 'Impossible de charger la carte du monde.';
+    return;
+  }
+
+  const world = await response.json();
+  renderWorld(world);
 }
 
 ws.onmessage = (event) => {
@@ -142,3 +190,5 @@ spendButton.addEventListener('click', async () => {
 });
 
 renderMenu();
+refreshWorld();
+setInterval(refreshWorld, 60000);
