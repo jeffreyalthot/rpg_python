@@ -13,6 +13,7 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - Nouveau système de **guilde**: création/rejoindre/quitter, classement des guildes en direct et chat interne pour coordonner les joueurs.
 - Ajout d'un **canal de chat mondial** pour discuter avec toute la communauté connectée en temps réel.
 - Nouvelle **bourse de groupes (LFG)**: publication d'annonces rapides (activité + message) pour recruter des joueurs en direct.
+- Ajout d'un système **"Je rejoins"** sur chaque annonce LFG avec compteur d'intéressés synchronisé en temps réel.
 - Nouveau **fil des chroniques communautaires** en temps réel: met en avant les victoires en duel, exploits de raid, saisons de contrat et mouvements de guildes pour dynamiser la rétention.
 - Nouveau **classement JcJ saisonnier** avec suivi des victoires/défaites et top 10 diffusé en temps réel.
 - Nouveau **tableau de contrats communautaires**: tous les joueurs peuvent contribuer en PA pour débloquer des récompenses de saison et un classement de contributeurs en direct.

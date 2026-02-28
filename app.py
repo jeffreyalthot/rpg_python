@@ -37,6 +37,7 @@ global_messages: Deque[dict] = deque(
     maxlen=40,
 )
 party_board: Deque[dict] = deque(maxlen=60)
+party_entry_counter = 0
 community_events: Deque[dict] = deque(
     [
         {
@@ -151,7 +152,18 @@ def contract_snapshot() -> dict:
 
 
 def party_board_snapshot() -> list[dict]:
-    return list(party_board)
+    return [
+        {
+            "id": entry["id"],
+            "author": entry["author"],
+            "activity": entry["activity"],
+            "message": entry["message"],
+            "created_at": entry["created_at"],
+            "interested_count": len(entry["interested_players"]),
+            "interested_players": sorted(entry["interested_players"]),
+        }
+        for entry in party_board
+    ]
 
 
 def community_events_snapshot() -> list[dict]:
@@ -806,6 +818,7 @@ async def post_party_board_entry(
     activity: str = Form(...),
     message: str = Form(...),
 ):
+    global party_entry_counter
     username = username.strip()
     activity = activity.strip()
     content = message.strip()
@@ -822,12 +835,15 @@ async def post_party_board_entry(
         return JSONResponse({"error": "Message trop long (220 max)"}, status_code=422)
 
     now = datetime.now(timezone.utc).isoformat()
+    party_entry_counter += 1
     party_board.appendleft(
         {
+            "id": party_entry_counter,
             "author": username,
             "activity": activity,
             "message": content,
             "created_at": now,
+            "interested_players": {username},
         }
     )
     push_community_event("party", f"{username} ouvre un groupe: {activity}.", actor=username)
@@ -850,6 +866,38 @@ async def delete_party_board_entries(username: str):
     party_board.extend(kept_entries)
     await broadcast_states()
     return {"entries": party_board_snapshot()}
+
+
+@app.post("/api/party-board/interest")
+async def mark_party_interest(username: str = Form(...), entry_id: int = Form(...)):
+    username = username.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    entry = next((current for current in party_board if current["id"] == entry_id), None)
+    if entry is None:
+        return JSONResponse({"error": "Annonce introuvable"}, status_code=404)
+
+    interested = entry["interested_players"]
+    if username in interested:
+        interested.discard(username)
+        action = "removed"
+    else:
+        interested.add(username)
+        action = "added"
+        if username != entry["author"]:
+            push_community_event("party", f"{username} rejoint le groupe '{entry['activity']}'.", actor=username)
+
+    await broadcast_states()
+    return {
+        "action": action,
+        "entry": {
+            "id": entry["id"],
+            "interested_count": len(interested),
+            "interested_players": sorted(interested),
+        },
+        "entries": party_board_snapshot(),
+    }
 
 
 @app.websocket("/ws")

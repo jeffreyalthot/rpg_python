@@ -160,6 +160,16 @@ input {
   background: #111c31;
   color: var(--muted);
   font-size: .9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .6rem;
+}
+
+.inline-action {
+  padding: .28rem .55rem;
+  font-size: .78rem;
+  flex-shrink: 0;
 }
 
 #worldMap {
