@@ -38,6 +38,8 @@ global_messages: Deque[dict] = deque(
 )
 party_board: Deque[dict] = deque(maxlen=60)
 party_entry_counter = 0
+friendships: Dict[str, Set[str]] = {}
+pending_friend_requests: Dict[str, Set[str]] = {}
 community_events: Deque[dict] = deque(
     [
         {
@@ -216,7 +218,32 @@ def get_or_create_player(username: str) -> PlayerState:
 def get_or_create_hero(username: str) -> HeroProfile:
     if username not in heroes:
         heroes[username] = HeroProfile()
+    ensure_social_profile(username)
     return heroes[username]
+
+
+def ensure_social_profile(username: str) -> None:
+    friendships.setdefault(username, set())
+    pending_friend_requests.setdefault(username, set())
+
+
+def social_snapshot(username: str) -> dict:
+    ensure_social_profile(username)
+    friends = [
+        {"username": friend, "online": friend in players}
+        for friend in sorted(friendships[username], key=str.lower)
+    ]
+    incoming = sorted(pending_friend_requests.get(username, set()), key=str.lower)
+    outgoing = sorted(
+        recipient
+        for recipient, requesters in pending_friend_requests.items()
+        if username in requesters
+    )
+    return {
+        "friends": friends,
+        "incoming_requests": incoming,
+        "outgoing_requests": outgoing,
+    }
 
 
 async def broadcast_states() -> None:
@@ -373,6 +400,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
 
     state = get_or_create_player(username)
     hero = get_or_create_hero(username)
+    ensure_social_profile(username)
     await broadcast_states()
     guild_name = player_guilds.get(username)
     guild_chat = list(guild_messages[guild_name]) if guild_name in guild_messages else []
@@ -394,6 +422,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "duel_leaderboard": duel_leaderboard_snapshot(),
         "party_board": party_board_snapshot(),
         "events": community_events_snapshot(),
+        "social": social_snapshot(username),
     }
 
 
@@ -898,6 +927,97 @@ async def mark_party_interest(username: str = Form(...), entry_id: int = Form(..
         },
         "entries": party_board_snapshot(),
     }
+
+
+@app.get("/api/friends")
+async def get_friends(username: str):
+    username = username.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    return social_snapshot(username)
+
+
+@app.post("/api/friends/request")
+async def send_friend_request(username: str = Form(...), target_username: str = Form(...)):
+    username = username.strip()
+    target_username = target_username.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if not target_username:
+        return JSONResponse({"error": "Pseudo cible invalide"}, status_code=422)
+    if target_username == username:
+        return JSONResponse({"error": "Impossible de s'ajouter soi-même"}, status_code=422)
+    if get_user_by_username(target_username) is None:
+        return JSONResponse({"error": "Joueur cible introuvable"}, status_code=404)
+
+    ensure_social_profile(username)
+    ensure_social_profile(target_username)
+
+    if target_username in friendships[username]:
+        return JSONResponse({"error": "Ce joueur est déjà dans votre liste d'amis"}, status_code=409)
+
+    if username in pending_friend_requests[target_username]:
+        return JSONResponse({"error": "Demande déjà envoyée"}, status_code=409)
+
+    if target_username in pending_friend_requests[username]:
+        pending_friend_requests[username].discard(target_username)
+        friendships[username].add(target_username)
+        friendships[target_username].add(username)
+        push_community_event("social", f"{username} et {target_username} deviennent alliés.", actor=username)
+        await broadcast_states()
+        return {"status": "accepted", "social": social_snapshot(username)}
+
+    pending_friend_requests[target_username].add(username)
+    await broadcast_states()
+    return {"status": "sent", "social": social_snapshot(username)}
+
+
+@app.post("/api/friends/respond")
+async def respond_friend_request(username: str = Form(...), requester_username: str = Form(...), action: str = Form(...)):
+    username = username.strip()
+    requester_username = requester_username.strip()
+    decision = action.strip().lower()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if decision not in {"accept", "reject"}:
+        return JSONResponse({"error": "Action invalide"}, status_code=422)
+
+    ensure_social_profile(username)
+    ensure_social_profile(requester_username)
+
+    if requester_username not in pending_friend_requests[username]:
+        return JSONResponse({"error": "Demande introuvable"}, status_code=404)
+
+    pending_friend_requests[username].discard(requester_username)
+    if decision == "accept":
+        friendships[username].add(requester_username)
+        friendships[requester_username].add(username)
+        push_community_event("social", f"{username} accepte l'alliance de {requester_username}.", actor=username)
+
+    await broadcast_states()
+    return {"status": decision, "social": social_snapshot(username)}
+
+
+@app.delete("/api/friends")
+async def remove_friend(username: str, target_username: str):
+    username = username.strip()
+    target_username = target_username.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    ensure_social_profile(username)
+    ensure_social_profile(target_username)
+
+    if target_username not in friendships[username]:
+        return JSONResponse({"error": "Ce joueur ne fait pas partie de vos alliés"}, status_code=404)
+
+    friendships[username].discard(target_username)
+    friendships[target_username].discard(username)
+    await broadcast_states()
+    return {"social": social_snapshot(username)}
 
 
 @app.websocket("/ws")

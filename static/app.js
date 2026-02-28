@@ -37,6 +37,11 @@ const postPartyButton = document.getElementById('postPartyButton');
 const clearPartyButton = document.getElementById('clearPartyButton');
 const partyBoardEl = document.getElementById('partyBoard');
 const communityEventsEl = document.getElementById('communityEvents');
+const friendTargetInput = document.getElementById('friendTarget');
+const sendFriendRequestButton = document.getElementById('sendFriendRequestButton');
+const friendsListEl = document.getElementById('friendsList');
+const incomingFriendRequestsEl = document.getElementById('incomingFriendRequests');
+const outgoingFriendRequestsEl = document.getElementById('outgoingFriendRequests');
 const raidStatusEl = document.getElementById('raidStatus');
 const raidAttackButton = document.getElementById('raidAttackButton');
 const raidBossNameEl = document.getElementById('raidBossName');
@@ -85,6 +90,7 @@ let duelLeaderboard = [];
 let myDuelStats = { wins: 0, losses: 0 };
 let partyBoardEntries = [];
 let communityEvents = [];
+let socialState = { friends: [], incoming_requests: [], outgoing_requests: [] };
 
 const hero = {
   level: 1,
@@ -215,11 +221,13 @@ function renderMenu() {
         globalChatMessages = [];
         partyBoardEntries = [];
         communityEvents = [];
+        socialState = { friends: [], incoming_requests: [], outgoing_requests: [] };
         renderGuildStatus();
         renderGuildChat();
         renderGlobalChat();
         renderPartyBoard();
         renderCommunityEvents();
+        renderFriendsPanel();
         renderRaid();
         renderContracts();
         renderMenu();
@@ -435,6 +443,122 @@ function renderGuildChat() {
 }
 
 
+
+function renderFriendsPanel() {
+  if (!friendsListEl || !incomingFriendRequestsEl || !outgoingFriendRequestsEl) return;
+
+  friendsListEl.innerHTML = '';
+  incomingFriendRequestsEl.innerHTML = '';
+  outgoingFriendRequestsEl.innerHTML = '';
+
+  if (!username) {
+    friendsListEl.innerHTML = '<li>Connectez-vous pour gérer vos alliés.</li>';
+    incomingFriendRequestsEl.innerHTML = '<li>--</li>';
+    outgoingFriendRequestsEl.innerHTML = '<li>--</li>';
+    return;
+  }
+
+  if (!(socialState.friends || []).length) {
+    friendsListEl.innerHTML = '<li>Aucun allié pour le moment.</li>';
+  } else {
+    socialState.friends.forEach((friend) => {
+      const li = document.createElement('li');
+      li.textContent = `${friend.username} — ${connectedPlayers.includes(friend.username) ? 'En ligne' : 'Hors ligne'}`;
+      const removeButton = buttonLabel('Retirer');
+      removeButton.addEventListener('click', async () => {
+        await removeFriend(friend.username);
+      });
+      li.appendChild(removeButton);
+      friendsListEl.appendChild(li);
+    });
+  }
+
+  if (!(socialState.incoming_requests || []).length) {
+    incomingFriendRequestsEl.innerHTML = '<li>Aucune invitation reçue.</li>';
+  } else {
+    socialState.incoming_requests.forEach((requester) => {
+      const li = document.createElement('li');
+      li.textContent = requester;
+      const acceptButton = buttonLabel('Accepter');
+      acceptButton.addEventListener('click', async () => respondFriendRequest(requester, 'accept'));
+      const rejectButton = buttonLabel('Refuser');
+      rejectButton.addEventListener('click', async () => respondFriendRequest(requester, 'reject'));
+      li.appendChild(acceptButton);
+      li.appendChild(rejectButton);
+      incomingFriendRequestsEl.appendChild(li);
+    });
+  }
+
+  if (!(socialState.outgoing_requests || []).length) {
+    outgoingFriendRequestsEl.innerHTML = '<li>Aucune invitation en attente.</li>';
+  } else {
+    socialState.outgoing_requests.forEach((target) => {
+      const li = document.createElement('li');
+      li.textContent = `${target} (en attente)`;
+      outgoingFriendRequestsEl.appendChild(li);
+    });
+  }
+}
+
+async function sendFriendRequest() {
+  if (!username || !friendTargetInput) return;
+  const target = friendTargetInput.value.trim();
+  if (!target) {
+    statusEl.textContent = 'Entrez un pseudo valide.';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('target_username', target);
+
+  const response = await fetch('/api/friends/request', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Invitation impossible.';
+    return;
+  }
+
+  socialState = data.social || socialState;
+  friendTargetInput.value = '';
+  renderFriendsPanel();
+  statusEl.textContent = data.status === 'accepted' ? `Alliance validée avec ${target}.` : `Invitation envoyée à ${target}.`;
+}
+
+async function respondFriendRequest(requester, action) {
+  if (!username) return;
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('requester_username', requester);
+  formData.append('action', action);
+
+  const response = await fetch('/api/friends/respond', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Réponse impossible.';
+    return;
+  }
+
+  socialState = data.social || socialState;
+  renderFriendsPanel();
+  statusEl.textContent = action === 'accept' ? `Invitation de ${requester} acceptée.` : `Invitation de ${requester} refusée.`;
+}
+
+async function removeFriend(friendName) {
+  if (!username) return;
+  const params = new URLSearchParams({ username, target_username: friendName });
+  const response = await fetch(`/api/friends?${params.toString()}`, { method: 'DELETE' });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Suppression impossible.';
+    return;
+  }
+
+  socialState = data.social || socialState;
+  renderFriendsPanel();
+  statusEl.textContent = `${friendName} retiré de vos alliés.`;
+}
+
 function renderGlobalChat() {
   if (!globalChatEl) {
     return;
@@ -576,7 +700,7 @@ async function togglePartyInterest(entryId) {
   const response = await fetch('/api/party-board/interest', { method: 'POST', body: formData });
   const data = await response.json();
   if (!response.ok) {
-    statusEl.textContent = data.error || 'Impossible de mettre à jour l'annonce.';
+    statusEl.textContent = data.error || "Impossible de mettre à jour l'annonce.";
     return;
   }
 
@@ -703,7 +827,7 @@ function renderContracts() {
   contractContributeButton.disabled = !username;
   contractContributorsEl.innerHTML = '';
   if (!contractState.contributors?.length) {
-    contractContributorsEl.innerHTML = '<li>Aucun contributeur pour l'instant.</li>';
+    contractContributorsEl.innerHTML = "<li>Aucun contributeur pour l'instant.</li>";
     return;
   }
 
@@ -906,6 +1030,7 @@ function renderPlayers(players) {
     }
   });
   renderDuelOpponents();
+  renderFriendsPanel();
 }
 
 
@@ -948,7 +1073,7 @@ function renderDuelStats() {
 
   duelLeaderboardEl.innerHTML = '';
   if (!duelLeaderboard.length) {
-    duelLeaderboardEl.innerHTML = '<li>Aucun duel classé enregistré pour l'instant.</li>';
+    duelLeaderboardEl.innerHTML = "<li>Aucun duel classé enregistré pour l'instant.</li>";
     return;
   }
 
@@ -981,7 +1106,9 @@ async function runDuel() {
   renderDuelLog(data.combat.log || []);
   myDuelStats = data.duel_stats || myDuelStats;
   duelLeaderboard = data.duel_leaderboard || duelLeaderboard;
+  socialState = data.social || socialState;
   renderDuelStats();
+  renderFriendsPanel();
 }
 
 function drawPoints(ctx, world, points, color, size) {
@@ -1316,6 +1443,7 @@ ws.onmessage = (event) => {
     renderPartyBoard();
     renderCommunityEvents();
     renderDuelStats();
+  renderFriendsPanel();
   }
 };
 
@@ -1364,6 +1492,7 @@ loginForm.addEventListener('submit', async (event) => {
   communityEvents = data.events || [];
   myDuelStats = data.duel_stats || myDuelStats;
   duelLeaderboard = data.duel_leaderboard || duelLeaderboard;
+  socialState = data.social || socialState;
   syncProfile(data.profile);
 
   if (data.start_position) {
@@ -1457,6 +1586,10 @@ duelButton?.addEventListener('click', async () => {
   await runDuel();
 });
 
+sendFriendRequestButton?.addEventListener('click', async () => {
+  await sendFriendRequest();
+});
+
 
 itemSearchInput?.addEventListener('input', renderItemCatalog);
 itemSlotFilter?.addEventListener('change', renderItemCatalog);
@@ -1478,6 +1611,7 @@ renderRaid();
 renderContracts();
 renderDuelOpponents();
 renderDuelLog();
+renderFriendsPanel();
 addLog('Le portail d\'Aetheria est ouvert.');
 loadOptions();
 refreshWorld();
