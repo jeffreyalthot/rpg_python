@@ -3,241 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RPG PA Multijoueur</title>
+  <title>Chroniques d'Aetheria - Portail</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header class="header">
-    <nav id="menuButtons" class="menu-buttons"></nav>
-
-    <section class="pa-panel" aria-label="Barre des points d'action">
-      <div class="pa-label">Points d'action</div>
-      <div class="pa-bar-wrapper">
-        <div id="paBar" class="pa-bar"></div>
-      </div>
-      <div id="paText" class="pa-text">0 / {{ max_pa }}</div>
-    </section>
+  <header class="header portal-header">
+    <h1>Chroniques d'Aetheria</h1>
+    <p>Portail immersif pour préparer ton aventure web RPG.</p>
+    <nav class="site-nav">
+      <a href="/">Accueil</a>
+      <a href="/auth">Identité</a>
+      <a href="/character">Avatar</a>
+      <a href="/world">Monde</a>
+      <a href="/combat">Combat</a>
+      <a href="/social">Communauté</a>
+      <a href="/play" class="cta-link">Jouer maintenant</a>
+    </nav>
   </header>
 
-  <main>
-    <section class="hero card">
-      <h1>Chroniques d'Aetheria</h1>
-      <p>MMO web orienté progression: exploration, guilde, raid et personnalisation visuelle complète.</p>
-      <p id="status" class="status">Connecte-toi pour commencer ton aventure.</p>
-      <div class="hero-actions">
-        <button id="spendButton" disabled>Utiliser 1 PA</button>
-        <button id="exploreButton" disabled>Explorer la zone</button>
-        <button id="quickBattle" disabled>Lancer un combat rapide</button>
+  <main class="portal-main">
+    <section class="card hero-portal">
+      <h2>Un design optimisé pour jouer confortablement</h2>
+      <p>Chaque intégration est découpée sur une page dédiée: création de personnage, monde, combat et interactions sociales.</p>
+      <div class="portal-grid-links">
+        <a class="portal-tile" href="/auth"><img src="/static/assets/hair-court.svg" alt="coiffure" /><span>Création d'identité</span></a>
+        <a class="portal-tile" href="/character"><img src="/static/assets/skin-clair.svg" alt="peau" /><span>Personnalisation avatar</span></a>
+        <a class="portal-tile" href="/world"><img src="/static/assets/world-map-5000.svg" alt="carte" /><span>Carte 5000 x 5000</span></a>
+        <a class="portal-tile" href="/combat"><img src="/static/assets/zone-battlefield.svg" alt="zone combat" /><span>Zones de combat</span></a>
       </div>
-      <p class="status">La VIT détermine le nombre d'attaques enchaînées avant la riposte adverse.</p>
-    </section>
-
-    <section class="dashboard-grid">
-      <article class="card" id="authCard">
-        <h2>Authentification</h2>
-        <div class="auth-layout">
-          <form id="loginForm">
-            <h3>Connexion</h3>
-            <label for="username">Username</label>
-            <input id="username" name="username" required minlength="2" maxlength="20" />
-
-            <label for="password">Mot de passe</label>
-            <input id="password" name="password" type="password" required minlength="6" />
-
-            <button type="submit">Login</button>
-          </form>
-
-          <form id="registerForm">
-            <h3>Inscription</h3>
-            <label for="registerUsername">Username unique</label>
-            <input id="registerUsername" name="username" required minlength="2" maxlength="20" />
-
-            <label for="registerPassword">Mot de passe</label>
-            <input id="registerPassword" name="password" type="password" required minlength="6" />
-
-            <label for="email">Email</label>
-            <input id="email" name="email" type="email" required />
-
-            <label for="firstName">Prénom</label>
-            <input id="firstName" name="first_name" required />
-
-            <label for="lastName">Nom</label>
-            <input id="lastName" name="last_name" required />
-
-            <label for="birthDate">Date de naissance</label>
-            <input id="birthDate" name="birth_date" type="date" required />
-
-            <label for="hair">Cheveux</label>
-            <select id="hair" name="hair" required></select>
-            <label for="eyes">Yeux</label>
-            <select id="eyes" name="eyes" required></select>
-            <label for="mouth">Bouche</label>
-            <select id="mouth" name="mouth" required></select>
-            <label for="nose">Nez</label>
-            <select id="nose" name="nose" required></select>
-            <label for="ears">Oreilles</label>
-            <select id="ears" name="ears" required></select>
-            <label for="skinTone">Couleur de peau</label>
-            <select id="skinTone" name="skin_tone" required></select>
-            <label for="startingVillage">Village de départ (10 choix)</label>
-            <select id="startingVillage" name="starting_village" required></select>
-
-            <button type="submit">Inscription</button>
-          </form>
-        </div>
-      </article>
-
-      <article class="card">
-        <h2>État du héros</h2>
-        <ul id="heroStats" class="stats-list"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Avatar & équipement</h2>
-        <div id="characterPreview" class="character-preview">
-          <div class="avatar" id="avatarSkin"></div>
-        </div>
-        <ul id="equipment" class="styled-list"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Joueurs connectés</h2>
-        <ul id="players"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Inventaire</h2>
-        <ul id="inventory" class="styled-list"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Objets obtenables (liste complète)</h2>
-        <div class="item-filters">
-          <input id="itemSearch" type="search" placeholder="Rechercher un objet" />
-          <select id="itemSlotFilter">
-            <option value="all">Tous les emplacements</option>
-          </select>
-          <select id="itemRarityFilter">
-            <option value="all">Toutes les raretés</option>
-          </select>
-        </div>
-        <p id="itemCatalogCount" class="status">-- objet(s)</p>
-        <div id="itemCatalog" class="item-catalog"></div>
-      </article>
-
-      <article class="card">
-        <h2>Quêtes actives</h2>
-        <ul id="quests" class="styled-list"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Guilde & communication</h2>
-        <p id="guildStatus" class="status">Connectez-vous pour rejoindre une guilde.</p>
-        <div class="guild-controls">
-          <input id="guildName" placeholder="Nom de guilde" minlength="3" maxlength="30" />
-          <div class="guild-buttons">
-            <button id="createGuildButton" type="button">Créer</button>
-            <button id="joinGuildButton" type="button">Rejoindre</button>
-            <button id="leaveGuildButton" type="button">Quitter</button>
-          </div>
-          <input id="guildMessage" placeholder="Message de guilde" maxlength="140" />
-          <button id="sendGuildMessageButton" type="button">Envoyer au chat guilde</button>
-        </div>
-        <h3>Top guildes</h3>
-        <ul id="guildRanking" class="styled-list"></ul>
-        <h3>Chat guilde</h3>
-        <ul id="guildChat" class="activity-log"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Canal mondial</h2>
-        <p class="status">Discutez avec tous les joueurs connectés, même hors guilde.</p>
-        <div class="guild-controls">
-          <input id="globalMessage" placeholder="Message global" maxlength="180" />
-          <button id="sendGlobalMessageButton" type="button">Envoyer au canal mondial</button>
-        </div>
-        <ul id="globalChat" class="activity-log"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Bourse de groupes (LFG)</h2>
-        <p class="status">Publiez une annonce rapide pour recruter des joueurs sur une activité précise.</p>
-        <div class="guild-controls">
-          <input id="partyActivity" placeholder="Activité (ex: Raid Hydre)" maxlength="40" />
-          <input id="partyMessage" placeholder="Rôle recherché, horaire, objectif..." maxlength="220" />
-          <div class="guild-buttons">
-            <button id="postPartyButton" type="button">Publier</button>
-            <button id="clearPartyButton" type="button">Supprimer mes annonces</button>
-          </div>
-        </div>
-        <ul id="partyBoard" class="activity-log"></ul>
-      </article>
-
-
-      <article class="card">
-        <h2>Duel JcJ (multijoueur)</h2>
-        <p>Choisissez un adversaire connecté. Le ratio de VIT détermine les combos d'attaque avant contre-attaque.</p>
-        <p id="duelPersonalStats" class="status">Bilan personnel: 0 victoire / 0 défaite.</p>
-        <div class="guild-controls">
-          <select id="duelOpponent"></select>
-          <button id="duelButton" type="button" disabled>Défier (1 PA)</button>
-        </div>
-        <ul id="duelLog" class="activity-log"></ul>
-        <h3>Classement JcJ saison en cours</h3>
-        <ul id="duelLeaderboard" class="styled-list"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Journal d'aventure</h2>
-        <ul id="activityLog" class="activity-log"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Raid de guilde mondial</h2>
-        <p id="raidStatus" class="status">Connectez-vous et rejoignez une guilde pour contribuer au raid.</p>
-        <button id="raidAttackButton" type="button" disabled>Attaquer le boss (1 PA)</button>
-        <h3 id="raidBossName">Boss inconnu</h3>
-        <div class="pa-bar-wrapper raid-bar-wrapper">
-          <div id="raidBossBar" class="pa-bar raid-bar"></div>
-        </div>
-        <p id="raidBossHp">PV: -- / --</p>
-        <h3>Classement des guildes</h3>
-        <ul id="raidRanking" class="styled-list"></ul>
-      </article>
-
-      <article class="card">
-        <h2>Contrat communautaire</h2>
-        <p id="contractStatus" class="status">Connectez-vous pour participer au contrat de saison.</p>
-        <h3 id="contractTitle">Mission inconnue</h3>
-        <p id="contractDescription">Chargement...</p>
-        <div class="pa-bar-wrapper raid-bar-wrapper">
-          <div id="contractBar" class="pa-bar"></div>
-        </div>
-        <p id="contractProgress">Progression: -- / --</p>
-        <button id="contractContributeButton" type="button" disabled>Contribuer (1 PA)</button>
-        <h3>Top contributeurs</h3>
-        <ul id="contractContributors" class="styled-list"></ul>
-      </article>
-
-      <article class="card world-card">
-        <h2>Carte du monde</h2>
-        <p>Monde de 5000 x 5000 cases, avec villages, champs de bataille et marchands ambulants.</p>
-        <canvas id="worldMap" width="500" height="500"></canvas>
-        <h3>Zone autour du héros (21 x 21 cases)</h3>
-        <canvas id="localMap" width="420" height="420"></canvas>
-        <div id="worldStats" class="world-stats"></div>
-      </article>
-
-      <article class="card world-card">
-        <h2>Case active et actions disponibles</h2>
-        <img id="tileImage" class="tile-image" alt="Illustration de la case active" />
-        <h3 id="tileTitle">Zone inconnue</h3>
-        <p id="tileDescription">Connectez-vous pour afficher les actions de la case.</p>
-        <div id="tileActions" class="tile-actions"></div>
-      </article>
     </section>
   </main>
-
-  <script src="/static/app.js"></script>
 </body>
 </html>
