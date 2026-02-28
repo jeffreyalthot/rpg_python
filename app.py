@@ -259,7 +259,11 @@ def party_board_snapshot() -> list[dict]:
             "created_at": entry["created_at"],
             "interested_count": len(entry["interested_players"]),
             "interested_players": sorted(entry["interested_players"]),
+            "ready_count": len(entry["ready_players"]),
+            "ready_players": sorted(entry["ready_players"]),
             "is_full": len(entry["interested_players"]) >= entry["max_members"],
+            "is_launched": bool(entry.get("is_launched", False)),
+            "launched_at": entry.get("launched_at"),
         }
         for entry in party_board
     ]
@@ -1372,6 +1376,9 @@ async def post_party_board_entry(
             "max_members": max_members,
             "created_at": now,
             "interested_players": {username},
+            "ready_players": {username},
+            "is_launched": False,
+            "launched_at": None,
         }
     )
     push_community_event("party", f"{username} ouvre un groupe: {activity}.", actor=username)
@@ -1407,10 +1414,14 @@ async def mark_party_interest(username: str = Form(...), entry_id: int = Form(..
         return JSONResponse({"error": "Annonce introuvable"}, status_code=404)
 
     interested = entry["interested_players"]
+    ready_players = entry["ready_players"]
     if username in interested:
         interested.discard(username)
+        ready_players.discard(username)
         action = "removed"
     else:
+        if entry.get("is_launched"):
+            return JSONResponse({"error": "Ce groupe est déjà verrouillé et lancé"}, status_code=409)
         if len(interested) >= entry["max_members"]:
             return JSONResponse({"error": "Ce groupe est déjà complet"}, status_code=409)
         interested.add(username)
@@ -1425,6 +1436,94 @@ async def mark_party_interest(username: str = Form(...), entry_id: int = Form(..
             "id": entry["id"],
             "interested_count": len(interested),
             "interested_players": sorted(interested),
+        },
+        "entries": party_board_snapshot(),
+    }
+
+
+@app.post("/api/party-board/ready")
+async def toggle_party_ready(username: str = Form(...), entry_id: int = Form(...)):
+    username = username.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    entry = next((current for current in party_board if current["id"] == entry_id), None)
+    if entry is None:
+        return JSONResponse({"error": "Annonce introuvable"}, status_code=404)
+    if entry.get("is_launched"):
+        return JSONResponse({"error": "Le groupe est déjà lancé"}, status_code=409)
+
+    interested = entry["interested_players"]
+    ready_players = entry["ready_players"]
+    if username not in interested:
+        return JSONResponse({"error": "Rejoignez d'abord ce groupe pour vous déclarer prêt"}, status_code=409)
+
+    if username in ready_players:
+        ready_players.discard(username)
+        action = "unready"
+    else:
+        ready_players.add(username)
+        action = "ready"
+
+    await broadcast_states()
+    return {
+        "action": action,
+        "entry": {
+            "id": entry["id"],
+            "ready_count": len(ready_players),
+            "ready_players": sorted(ready_players),
+            "interested_count": len(interested),
+            "interested_players": sorted(interested),
+        },
+        "entries": party_board_snapshot(),
+    }
+
+
+@app.post("/api/party-board/launch")
+async def launch_party_group(username: str = Form(...), entry_id: int = Form(...)):
+    username = username.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    entry = next((current for current in party_board if current["id"] == entry_id), None)
+    if entry is None:
+        return JSONResponse({"error": "Annonce introuvable"}, status_code=404)
+    if entry["author"] != username:
+        return JSONResponse({"error": "Seul le leader peut lancer ce groupe"}, status_code=403)
+    if entry.get("is_launched"):
+        return JSONResponse({"error": "Ce groupe a déjà été lancé"}, status_code=409)
+
+    interested = entry["interested_players"]
+    ready_players = entry["ready_players"]
+    if len(interested) < 2:
+        return JSONResponse({"error": "Il faut au moins 2 joueurs pour lancer un groupe"}, status_code=422)
+
+    missing_ready = sorted(interested - ready_players)
+    if missing_ready:
+        return JSONResponse(
+            {
+                "error": "Tous les joueurs doivent être prêts avant le lancement",
+                "missing_ready": missing_ready,
+            },
+            status_code=409,
+        )
+
+    entry["is_launched"] = True
+    entry["launched_at"] = datetime.now(timezone.utc).isoformat()
+    push_community_event(
+        "party",
+        f"{username} lance le groupe '{entry['activity']}' avec {len(interested)} joueurs prêts.",
+        actor=username,
+    )
+
+    await broadcast_states()
+    return {
+        "entry": {
+            "id": entry["id"],
+            "is_launched": True,
+            "launched_at": entry["launched_at"],
+            "interested_players": sorted(interested),
+            "ready_players": sorted(ready_players),
         },
         "entries": party_board_snapshot(),
     }
