@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from collections import deque
 from random import Random
 from typing import Deque, Dict, Set
@@ -53,6 +53,10 @@ community_events: Deque[dict] = deque(
 connections: Set[WebSocket] = set()
 world = build_world()
 MAX_GUILD_MESSAGES = 25
+CHAT_MIN_INTERVAL_SECONDS = 3
+CHAT_BLOCKED_WORDS = ("merde", "con", "connard", "pute")
+chat_last_message_at: Dict[str, datetime] = {}
+chat_last_message_text: Dict[str, str] = {}
 raid_boss_names = ["Hydre Astrale", "Titan de Cendre", "Liche du Néant", "Golem Tempête"]
 raid_state = {
     "name": raid_boss_names[0],
@@ -318,6 +322,39 @@ def social_snapshot(username: str) -> dict:
         "incoming_requests": incoming,
         "outgoing_requests": outgoing,
     }
+
+
+def sanitize_chat_message(message: str) -> str:
+    sanitized = message
+    for blocked_word in CHAT_BLOCKED_WORDS:
+        sanitized = sanitized.replace(blocked_word, "***")
+        sanitized = sanitized.replace(blocked_word.capitalize(), "***")
+        sanitized = sanitized.replace(blocked_word.upper(), "***")
+    return sanitized
+
+
+def validate_chat_message(username: str, content: str) -> JSONResponse | None:
+    now = datetime.now(timezone.utc)
+    last_sent_at = chat_last_message_at.get(username)
+    if last_sent_at is not None:
+        elapsed_seconds = (now - last_sent_at).total_seconds()
+        if elapsed_seconds < CHAT_MIN_INTERVAL_SECONDS:
+            wait_seconds = CHAT_MIN_INTERVAL_SECONDS - elapsed_seconds
+            return JSONResponse(
+                {"error": f"Anti-spam actif: attendez encore {wait_seconds:.1f}s"},
+                status_code=429,
+            )
+
+    previous_message = chat_last_message_text.get(username)
+    if previous_message and previous_message.casefold() == content.casefold():
+        return JSONResponse(
+            {"error": "Message dupliqué: variez votre message avant de le renvoyer"},
+            status_code=409,
+        )
+
+    chat_last_message_at[username] = now
+    chat_last_message_text[username] = content
+    return None
 
 
 async def broadcast_states() -> None:
@@ -928,10 +965,16 @@ async def post_guild_message(username: str = Form(...), message: str = Form(...)
     if len(content) < 2:
         return JSONResponse({"error": "Message trop court"}, status_code=422)
 
+    chat_error = validate_chat_message(username, content)
+    if chat_error is not None:
+        return chat_error
+
+    sanitized_content = sanitize_chat_message(content)
+
     guild_messages.setdefault(guild_name, deque(maxlen=MAX_GUILD_MESSAGES)).append(
         {
             "author": username,
-            "message": content,
+            "message": sanitized_content,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -960,10 +1003,16 @@ async def post_global_message(username: str = Form(...), message: str = Form(...
     if len(content) > 180:
         return JSONResponse({"error": "Message trop long (180 max)"}, status_code=422)
 
+    chat_error = validate_chat_message(username, content)
+    if chat_error is not None:
+        return chat_error
+
+    sanitized_content = sanitize_chat_message(content)
+
     global_messages.append(
         {
             "author": username,
-            "message": content,
+            "message": sanitized_content,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
     )
