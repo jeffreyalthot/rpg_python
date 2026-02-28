@@ -34,6 +34,15 @@ const raidBossNameEl = document.getElementById('raidBossName');
 const raidBossBarEl = document.getElementById('raidBossBar');
 const raidBossHpEl = document.getElementById('raidBossHp');
 const raidRankingEl = document.getElementById('raidRanking');
+const equipmentEl = document.getElementById('equipment');
+const itemCatalogEl = document.getElementById('itemCatalog');
+const hairSelect = document.getElementById('hair');
+const eyesSelect = document.getElementById('eyes');
+const mouthSelect = document.getElementById('mouth');
+const noseSelect = document.getElementById('nose');
+const earsSelect = document.getElementById('ears');
+const skinToneSelect = document.getElementById('skinTone');
+const startingVillageSelect = document.getElementById('startingVillage');
 
 let username = null;
 let maxPA = 20;
@@ -42,6 +51,7 @@ let worldPositions = new Map();
 let currentGuild = null;
 let guildChatMessages = [];
 let raidState = null;
+let allItems = [];
 
 const hero = {
   level: 1,
@@ -53,6 +63,8 @@ const hero = {
   x: 0,
   y: 0,
   inventory: ['Épée rouillée', 'Potion de soin', 'Cape de voyage'],
+  equipment: { head: null, chest: null, weapon: 'Épée rouillée', back: 'Cape de voyage', hands: null, feet: null, trinket: null },
+  profile: { hair: 'Court', eyes: 'Marron', mouth: 'Neutre', nose: 'Droit', ears: 'Rondes', skin_tone: 'Clair', starting_village: 'Village départ 1' },
   quests: [
     'Explorer 3 villages voisins',
     'Vaincre 2 ennemis en zone de combat',
@@ -198,7 +210,14 @@ function syncHero(serverHero) {
   hero.hp = serverHero.hp;
   hero.maxHp = serverHero.max_hp;
   hero.inventory = [...serverHero.inventory];
+  hero.equipment = { ...hero.equipment, ...(serverHero.equipment || {}) };
 }
+
+function syncProfile(profile) {
+  if (!profile) return;
+  hero.profile = { ...hero.profile, ...profile };
+}
+
 
 function renderHeroStats() {
   heroStats.innerHTML = `
@@ -207,7 +226,50 @@ function renderHeroStats() {
     <li><strong>PV:</strong> ${hero.hp} / ${hero.maxHp}</li>
     <li><strong>Or:</strong> ${hero.gold}</li>
     <li><strong>Position:</strong> (${hero.x}, ${hero.y}) - ${hero.location}</li>
+    <li><strong>Village de départ:</strong> ${hero.profile.starting_village}</li>
   `;
+}
+
+function renderEquipment() {
+  if (!equipmentEl) return;
+  const labels = { head: 'Tête', chest: 'Torse', weapon: 'Arme', back: 'Dos', hands: 'Mains', feet: 'Pieds', trinket: 'Artefact' };
+  equipmentEl.innerHTML = '';
+  Object.entries(labels).forEach(([slot,label]) => {
+    const li = document.createElement('li');
+    li.textContent = `${label}: ${hero.equipment[slot] || 'Aucun'}`;
+    equipmentEl.appendChild(li);
+  });
+}
+
+function renderCharacterPreview() {
+  const container = document.getElementById('characterPreview');
+  if (!container) return;
+  const eye = hero.profile.eyes.toLowerCase();
+  const skin = { porcelaine:'#f8e0d0', clair:'#f1c27d', doré:'#d9a066', olive:'#b68655', brun:'#8d5524', ebène:'#5a3a22' }[hero.profile.skin_tone.toLowerCase()] || '#f1c27d';
+  container.innerHTML = `<div class='avatar-shell' style='background:${skin}'>
+    <div class='avatar-hair'>${hero.profile.hair}</div>
+    <div class='avatar-eyes'>${hero.profile.eyes}</div>
+    <div class='avatar-mouth'>${hero.profile.mouth}</div>
+    <div class='avatar-nose'>${hero.profile.nose}</div>
+    <div class='avatar-ears'>${hero.profile.ears}</div>
+    <div class='avatar-equip'>${Object.values(hero.equipment).filter(Boolean).join(' • ')}</div>
+  </div>`;
+}
+
+async function equipItem(itemName) {
+  if (!username) return;
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('item_name', itemName);
+  const response = await fetch('/api/equipment/equip', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Équipement impossible';
+    return;
+  }
+  syncHero(data.hero);
+  renderEquipment();
+  renderCharacterPreview();
 }
 
 function renderInventory() {
@@ -215,7 +277,24 @@ function renderInventory() {
   hero.inventory.forEach((item) => {
     const li = document.createElement('li');
     li.textContent = item;
+    const itemMeta = allItems.find((entry) => entry.name === item);
+    if (itemMeta?.slot && itemMeta.slot !== 'consumable' && username) {
+      const button = buttonLabel('Équiper');
+      button.addEventListener('click', async () => equipItem(item));
+      li.appendChild(button);
+    }
     inventoryEl.appendChild(li);
+  });
+}
+
+function renderItemCatalog() {
+  if (!itemCatalogEl) return;
+  itemCatalogEl.innerHTML = '';
+  allItems.forEach((item) => {
+    const card = document.createElement('article');
+    card.className = 'item-card';
+    card.innerHTML = `<img src='${item.image}' alt='${item.name}'><h4>${item.name}</h4><p>${item.slot} • ${item.rarity}</p>`;
+    itemCatalogEl.appendChild(card);
   });
 }
 
@@ -693,6 +772,8 @@ async function exploreCurrentTile() {
   syncHero(data.hero);
   renderHeroStats();
   renderInventory();
+renderEquipment();
+renderCharacterPreview();
 
   const hpText = data.outcome.hp_delta >= 0 ? `+${data.outcome.hp_delta}` : `${data.outcome.hp_delta}`;
   let summary = `${data.outcome.summary}: +${data.outcome.xp_gain} XP, +${data.outcome.gold_gain} or, PV ${hpText}.`;
@@ -735,6 +816,8 @@ function runQuickBattle() {
 
   renderHeroStats();
   renderInventory();
+renderEquipment();
+renderCharacterPreview();
   renderWorld(worldState);
   renderActionPanel();
 
@@ -743,6 +826,36 @@ function runQuickBattle() {
   addLog(summary);
 }
 
+
+async function loadOptions() {
+  const response = await fetch('/api/options');
+  if (!response.ok) return;
+  const data = await response.json();
+  allItems = data.items || [];
+  renderItemCatalog();
+
+  const mapping = { hair: hairSelect, eyes: eyesSelect, mouth: mouthSelect, nose: noseSelect, ears: earsSelect, skin_tone: skinToneSelect };
+  Object.entries(mapping).forEach(([key, select]) => {
+    if (!select) return;
+    select.innerHTML = '';
+    (data.character?.[key] || []).forEach((option) => {
+      const opt = document.createElement('option');
+      opt.value = option;
+      opt.textContent = option;
+      select.appendChild(opt);
+    });
+  });
+
+  if (startingVillageSelect) {
+    startingVillageSelect.innerHTML = '';
+    (data.starting_villages || []).forEach((village) => {
+      const opt = document.createElement('option');
+      opt.value = village.name;
+      opt.textContent = village.name;
+      startingVillageSelect.appendChild(opt);
+    });
+  }
+}
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
   if (data.type === 'snapshot') {
@@ -793,13 +906,13 @@ loginForm.addEventListener('submit', async (event) => {
   syncHero(data.hero);
   currentGuild = data.guild || null;
   guildChatMessages = data.guild_chat || [];
+  syncProfile(data.profile);
 
-  if (worldState?.starting_villages?.length) {
-    const start = worldState.starting_villages[0];
-    hero.x = start.x;
-    hero.y = start.y;
-    hero.location = start.name;
+  if (data.start_position) {
+    hero.x = data.start_position.x;
+    hero.y = data.start_position.y;
   }
+  hero.location = hero.profile.starting_village;
 
   renderPA(data.action_points);
   statusEl.textContent = `Bienvenue ${username}. Régénération: ${data.recharge_per_hour} PA/h.`;
@@ -808,6 +921,8 @@ loginForm.addEventListener('submit', async (event) => {
   quickBattleButton.disabled = false;
   renderMenu();
   renderHeroStats();
+  renderEquipment();
+  renderCharacterPreview();
   renderWorld(worldState);
   renderActionPanel();
   renderGuildStatus();
@@ -859,12 +974,15 @@ raidAttackButton?.addEventListener('click', async () => {
 renderMenu();
 renderHeroStats();
 renderInventory();
+renderEquipment();
+renderCharacterPreview();
 renderQuests();
 renderActionPanel();
 renderGuildStatus();
 renderGuildChat();
 renderRaid();
 addLog('Le portail d\'Aetheria est ouvert.');
+loadOptions();
 refreshWorld();
 refreshGuilds();
 refreshRaid();
