@@ -27,10 +27,34 @@ def init_db() -> None:
                 first_name TEXT NOT NULL,
                 last_name TEXT NOT NULL,
                 birth_date TEXT NOT NULL,
+                hair TEXT NOT NULL DEFAULT 'Court',
+                eyes TEXT NOT NULL DEFAULT 'Marron',
+                mouth TEXT NOT NULL DEFAULT 'Neutre',
+                nose TEXT NOT NULL DEFAULT 'Droit',
+                ears TEXT NOT NULL DEFAULT 'Rondes',
+                skin_tone TEXT NOT NULL DEFAULT 'Clair',
+                starting_village TEXT NOT NULL DEFAULT 'Village départ 1',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        existing_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        defaults = {
+            "hair": "Court",
+            "eyes": "Marron",
+            "mouth": "Neutre",
+            "nose": "Droit",
+            "ears": "Rondes",
+            "skin_tone": "Clair",
+            "starting_village": "Village départ 1",
+        }
+        for col, default_value in defaults.items():
+            if col not in existing_columns:
+                safe_default = default_value.replace("'", "''")
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT NOT NULL DEFAULT '{safe_default}'")
 
 
 def hash_password(password: str) -> str:
@@ -57,6 +81,13 @@ def create_user(
     first_name: str,
     last_name: str,
     birth_date: str,
+    hair: str,
+    eyes: str,
+    mouth: str,
+    nose: str,
+    ears: str,
+    skin_tone: str,
+    starting_village: str,
 ) -> bool:
     payload = {
         "username": username,
@@ -65,13 +96,26 @@ def create_user(
         "first_name": first_name,
         "last_name": last_name,
         "birth_date": birth_date,
+        "hair": hair,
+        "eyes": eyes,
+        "mouth": mouth,
+        "nose": nose,
+        "ears": ears,
+        "skin_tone": skin_tone,
+        "starting_village": starting_village,
     }
     try:
         with get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO users (username, password_hash, email, first_name, last_name, birth_date)
-                VALUES (:username, :password_hash, :email, :first_name, :last_name, :birth_date)
+                INSERT INTO users (
+                    username, password_hash, email, first_name, last_name, birth_date,
+                    hair, eyes, mouth, nose, ears, skin_tone, starting_village
+                )
+                VALUES (
+                    :username, :password_hash, :email, :first_name, :last_name, :birth_date,
+                    :hair, :eyes, :mouth, :nose, :ears, :skin_tone, :starting_village
+                )
                 """,
                 payload,
             )

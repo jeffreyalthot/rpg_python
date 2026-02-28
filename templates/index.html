@@ -22,7 +22,7 @@
   <main>
     <section class="hero card">
       <h1>Chroniques d'Aetheria</h1>
-      <p>Explore, combats, échange avec les marchands et fais progresser ton héros dans un univers multijoueur vivant.</p>
+      <p>MMO web orienté progression: exploration, guilde, raid et personnalisation visuelle complète.</p>
       <p id="status" class="status">Connecte-toi pour commencer ton aventure.</p>
       <div class="hero-actions">
         <button id="spendButton" disabled>Utiliser 1 PA</button>
@@ -66,6 +66,21 @@
             <label for="birthDate">Date de naissance</label>
             <input id="birthDate" name="birth_date" type="date" required />
 
+            <label for="hair">Cheveux</label>
+            <select id="hair" name="hair" required></select>
+            <label for="eyes">Yeux</label>
+            <select id="eyes" name="eyes" required></select>
+            <label for="mouth">Bouche</label>
+            <select id="mouth" name="mouth" required></select>
+            <label for="nose">Nez</label>
+            <select id="nose" name="nose" required></select>
+            <label for="ears">Oreilles</label>
+            <select id="ears" name="ears" required></select>
+            <label for="skinTone">Couleur de peau</label>
+            <select id="skinTone" name="skin_tone" required></select>
+            <label for="startingVillage">Village de départ (10 choix)</label>
+            <select id="startingVillage" name="starting_village" required></select>
+
             <button type="submit">Inscription</button>
           </form>
         </div>
@@ -77,6 +92,14 @@
       </article>
 
       <article class="card">
+        <h2>Avatar & équipement</h2>
+        <div id="characterPreview" class="character-preview">
+          <div class="avatar" id="avatarSkin"></div>
+        </div>
+        <ul id="equipment" class="styled-list"></ul>
+      </article>
+
+      <article class="card">
         <h2>Joueurs connectés</h2>
         <ul id="players"></ul>
       </article>
@@ -84,6 +107,11 @@
       <article class="card">
         <h2>Inventaire</h2>
         <ul id="inventory" class="styled-list"></ul>
+      </article>
+
+      <article class="card">
+        <h2>Objets obtenables (liste complète)</h2>
+        <div id="itemCatalog" class="item-catalog"></div>
       </article>
 
       <article class="card">
@@ -131,16 +159,9 @@
       <article class="card world-card">
         <h2>Carte du monde</h2>
         <p>Monde de 5000 x 5000 cases, avec villages, champs de bataille et marchands ambulants.</p>
-        <canvas id="worldMap" width="500" height="500" aria-label="Carte du monde"></canvas>
+        <canvas id="worldMap" width="500" height="500"></canvas>
         <h3>Zone autour du héros (21 x 21 cases)</h3>
-        <canvas id="localMap" width="420" height="420" aria-label="Carte locale"></canvas>
-        <div class="legend">
-          <span><i class="dot start"></i> Village de départ</span>
-          <span><i class="dot village"></i> Village</span>
-          <span><i class="dot battle"></i> Zone de combat</span>
-          <span><i class="dot merchant"></i> Marchand</span>
-          <span><i class="dot hero"></i> Héros</span>
-        </div>
+        <canvas id="localMap" width="420" height="420"></canvas>
         <div id="worldStats" class="world-stats"></div>
       </article>
 

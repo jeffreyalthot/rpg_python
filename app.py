@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from database import create_user, get_user_by_username, init_db, verify_password
+from game_content import CHARACTER_OPTIONS, ITEM_CATALOG
 from game_logic import MAX_ACTION_POINTS, RECHARGE_PER_HOUR, PlayerState, normalize_player_state
 from game_progress import HeroProfile, apply_adventure, hero_snapshot, outcome_for_tile
 from world_map import build_world, world_snapshot
@@ -36,6 +37,26 @@ raid_state = {
     "guild_damage": {},
     "last_reset_at": datetime.now(timezone.utc).isoformat(),
 }
+
+
+def get_village_position(village_name: str) -> tuple[int, int]:
+    for village in world.starting_villages:
+        if village.name == village_name:
+            return village.x, village.y
+    default = world.starting_villages[0]
+    return default.x, default.y
+
+
+def profile_snapshot(user: dict) -> dict:
+    return {
+        "hair": user["hair"],
+        "eyes": user["eyes"],
+        "mouth": user["mouth"],
+        "nose": user["nose"],
+        "ears": user["ears"],
+        "skin_tone": user["skin_tone"],
+        "starting_village": user["starting_village"],
+    }
 
 
 def raid_snapshot() -> dict:
@@ -115,6 +136,15 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "max_pa": MAX_ACTION_POINTS})
 
 
+@app.get("/api/options")
+async def get_options():
+    return {
+        "character": CHARACTER_OPTIONS,
+        "starting_villages": [v.__dict__ for v in world.starting_villages],
+        "items": [{"name": name, **meta} for name, meta in ITEM_CATALOG.items()],
+    }
+
+
 @app.post("/api/register")
 async def register(
     username: str = Form(...),
@@ -123,6 +153,13 @@ async def register(
     first_name: str = Form(...),
     last_name: str = Form(...),
     birth_date: str = Form(...),
+    hair: str = Form(...),
+    eyes: str = Form(...),
+    mouth: str = Form(...),
+    nose: str = Form(...),
+    ears: str = Form(...),
+    skin_tone: str = Form(...),
+    starting_village: str = Form(...),
 ):
     username = username.strip()
     email = email.strip()
@@ -135,6 +172,21 @@ async def register(
     if len(password) < 6:
         return JSONResponse({"error": "Mot de passe trop court (6 min)"}, status_code=422)
 
+    if starting_village not in {v.name for v in world.starting_villages}:
+        return JSONResponse({"error": "Village de départ invalide"}, status_code=422)
+
+    char_payload = {
+        "hair": hair,
+        "eyes": eyes,
+        "mouth": mouth,
+        "nose": nose,
+        "ears": ears,
+        "skin_tone": skin_tone,
+    }
+    for field, value in char_payload.items():
+        if value not in CHARACTER_OPTIONS[field]:
+            return JSONResponse({"error": f"Option invalide pour {field}"}, status_code=422)
+
     if not create_user(
         username=username,
         password=password,
@@ -142,6 +194,8 @@ async def register(
         first_name=first_name,
         last_name=last_name,
         birth_date=birth_date,
+        starting_village=starting_village,
+        **char_payload,
     ):
         return JSONResponse({"error": "Ce username est déjà utilisé"}, status_code=409)
 
@@ -164,12 +218,16 @@ async def login(username: str = Form(...), password: str = Form(...)):
     guild_name = player_guilds.get(username)
     guild_chat = list(guild_messages[guild_name]) if guild_name in guild_messages else []
 
+    x, y = get_village_position(user["starting_village"])
+
     return {
         "username": username,
         "action_points": state.action_points,
         "max_action_points": MAX_ACTION_POINTS,
         "recharge_per_hour": RECHARGE_PER_HOUR,
         "hero": hero_snapshot(hero),
+        "profile": profile_snapshot(user),
+        "start_position": {"x": x, "y": y},
         "guild": guild_name,
         "guild_chat": guild_chat,
     }
@@ -225,6 +283,23 @@ async def adventure(username: str = Form(...), tile_kind: str = Form("plain")):
     }
 
 
+@app.post("/api/equipment/equip")
+async def equip_item(username: str = Form(...), item_name: str = Form(...)):
+    username = username.strip()
+    item_name = item_name.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    hero = get_or_create_hero(username)
+    if item_name not in hero.inventory:
+        return JSONResponse({"error": "Objet absent de l'inventaire"}, status_code=404)
+
+    item = ITEM_CATALOG.get(item_name)
+    if not item or item["slot"] == "consumable":
+        return JSONResponse({"error": "Cet objet n'est pas équipable"}, status_code=422)
+
+    hero.equipment[item["slot"]] = item_name
+    return {"hero": hero_snapshot(hero)}
 
 
 @app.get("/api/world")
@@ -416,6 +491,7 @@ async def post_guild_message(username: str = Form(...), message: str = Form(...)
         "guild": guild_name,
         "chat": list(guild_messages[guild_name]),
     }
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
