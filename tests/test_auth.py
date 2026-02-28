@@ -18,6 +18,13 @@ def test_register_and_login(tmp_path, monkeypatch):
             first_name="Jean",
             last_name="Dupont",
             birth_date="1990-05-20",
+            hair="Court",
+            eyes="Marron",
+            mouth="Neutre",
+            nose="Droit",
+            ears="Rondes",
+            skin_tone="Clair",
+            starting_village="Village départ 1",
         )
     )
     assert register_response["message"] == "Inscription réussie"
@@ -30,6 +37,13 @@ def test_register_and_login(tmp_path, monkeypatch):
             first_name="Paul",
             last_name="Durand",
             birth_date="1992-06-21",
+            hair="Court",
+            eyes="Marron",
+            mouth="Neutre",
+            nose="Droit",
+            ears="Rondes",
+            skin_tone="Clair",
+            starting_village="Village départ 1",
         )
     )
     assert duplicate_response.status_code == 409
