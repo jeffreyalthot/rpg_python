@@ -31,6 +31,11 @@ const sendGuildMessageButton = document.getElementById('sendGuildMessageButton')
 const globalChatEl = document.getElementById('globalChat');
 const globalMessageInput = document.getElementById('globalMessage');
 const sendGlobalMessageButton = document.getElementById('sendGlobalMessageButton');
+const partyActivityInput = document.getElementById('partyActivity');
+const partyMessageInput = document.getElementById('partyMessage');
+const postPartyButton = document.getElementById('postPartyButton');
+const clearPartyButton = document.getElementById('clearPartyButton');
+const partyBoardEl = document.getElementById('partyBoard');
 const raidStatusEl = document.getElementById('raidStatus');
 const raidAttackButton = document.getElementById('raidAttackButton');
 const raidBossNameEl = document.getElementById('raidBossName');
@@ -77,6 +82,7 @@ let filteredItems = [];
 let connectedPlayers = [];
 let duelLeaderboard = [];
 let myDuelStats = { wins: 0, losses: 0 };
+let partyBoardEntries = [];
 
 const hero = {
   level: 1,
@@ -205,9 +211,11 @@ function renderMenu() {
         currentGuild = null;
         guildChatMessages = [];
         globalChatMessages = [];
+        partyBoardEntries = [];
         renderGuildStatus();
         renderGuildChat();
         renderGlobalChat();
+        renderPartyBoard();
         renderRaid();
         renderContracts();
         renderMenu();
@@ -440,6 +448,77 @@ function renderGlobalChat() {
     li.textContent = `[${time}] ${entry.author}: ${entry.message}`;
     globalChatEl.appendChild(li);
   });
+}
+
+function renderPartyBoard() {
+  if (!partyBoardEl) {
+    return;
+  }
+
+  partyBoardEl.innerHTML = '';
+  if (!partyBoardEntries.length) {
+    partyBoardEl.innerHTML = '<li>Aucune annonce active. Soyez le premier à recruter !</li>';
+    return;
+  }
+
+  partyBoardEntries.slice(0, 12).forEach((entry) => {
+    const li = document.createElement('li');
+    const time = new Date(entry.created_at).toLocaleTimeString();
+    li.textContent = `[${time}] ${entry.author} • ${entry.activity} — ${entry.message}`;
+    partyBoardEl.appendChild(li);
+  });
+}
+
+async function postPartyBoardEntry() {
+  if (!username || !partyActivityInput || !partyMessageInput) {
+    return;
+  }
+
+  const activity = partyActivityInput.value.trim();
+  const message = partyMessageInput.value.trim();
+  if (activity.length < 3) {
+    statusEl.textContent = 'L\'activité doit contenir au moins 3 caractères.';
+    return;
+  }
+  if (message.length < 6) {
+    statusEl.textContent = 'Le message de recrutement doit contenir au moins 6 caractères.';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('activity', activity);
+  formData.append('message', message);
+
+  const response = await fetch('/api/party-board', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Impossible de publier l\'annonce.';
+    return;
+  }
+
+  partyBoardEntries = data.entries || [];
+  partyActivityInput.value = '';
+  partyMessageInput.value = '';
+  renderPartyBoard();
+  addLog('Annonce de groupe publiée.');
+}
+
+async function clearPartyBoardEntries() {
+  if (!username) {
+    return;
+  }
+
+  const response = await fetch(`/api/party-board?username=${encodeURIComponent(username)}`, { method: 'DELETE' });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Suppression impossible.';
+    return;
+  }
+
+  partyBoardEntries = data.entries || [];
+  renderPartyBoard();
+  addLog('Vos annonces de groupe ont été supprimées.');
 }
 
 async function sendGlobalMessage() {
@@ -1163,9 +1242,11 @@ ws.onmessage = (event) => {
     contractState = data.contracts || contractState;
     duelLeaderboard = data.duels || duelLeaderboard;
     globalChatMessages = data.global_chat || globalChatMessages;
+    partyBoardEntries = data.party_board || partyBoardEntries;
     renderRaid();
     renderContracts();
     renderGlobalChat();
+    renderPartyBoard();
     renderDuelStats();
   }
 };
@@ -1211,6 +1292,7 @@ loginForm.addEventListener('submit', async (event) => {
   currentGuild = data.guild || null;
   guildChatMessages = data.guild_chat || [];
   globalChatMessages = data.global_chat || [];
+  partyBoardEntries = data.party_board || [];
   myDuelStats = data.duel_stats || myDuelStats;
   duelLeaderboard = data.duel_leaderboard || duelLeaderboard;
   syncProfile(data.profile);
@@ -1235,6 +1317,7 @@ loginForm.addEventListener('submit', async (event) => {
   renderGuildStatus();
   renderGuildChat();
   renderGlobalChat();
+  renderPartyBoard();
   renderRaid();
   renderContracts();
   refreshGuilds();
@@ -1284,6 +1367,14 @@ sendGlobalMessageButton?.addEventListener('click', async () => {
   await sendGlobalMessage();
 });
 
+postPartyButton?.addEventListener('click', async () => {
+  await postPartyBoardEntry();
+});
+
+clearPartyButton?.addEventListener('click', async () => {
+  await clearPartyBoardEntries();
+});
+
 raidAttackButton?.addEventListener('click', async () => {
   await attackRaidBoss();
 });
@@ -1311,6 +1402,7 @@ renderActionPanel();
 renderGuildStatus();
 renderGuildChat();
 renderGlobalChat();
+renderPartyBoard();
 renderRaid();
 renderContracts();
 renderDuelOpponents();

@@ -36,6 +36,7 @@ global_messages: Deque[dict] = deque(
     ],
     maxlen=40,
 )
+party_board: Deque[dict] = deque(maxlen=60)
 connections: Set[WebSocket] = set()
 world = build_world()
 MAX_GUILD_MESSAGES = 25
@@ -139,6 +140,10 @@ def contract_snapshot() -> dict:
     }
 
 
+def party_board_snapshot() -> list[dict]:
+    return list(party_board)
+
+
 def rotate_contracts() -> None:
     next_season = contract_state["season"] + 1
     template = contracts_pool[(next_season - 1) % len(contracts_pool)]
@@ -199,6 +204,7 @@ async def broadcast_states() -> None:
         "contracts": contract_snapshot(),
         "duels": duel_leaderboard_snapshot(),
         "global_chat": list(global_messages),
+        "party_board": party_board_snapshot(),
     }
     disconnected: Set[WebSocket] = set()
     for ws in connections:
@@ -313,6 +319,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "global_chat": list(global_messages),
         "duel_stats": get_or_create_duel_stats(username),
         "duel_leaderboard": duel_leaderboard_snapshot(),
+        "party_board": party_board_snapshot(),
     }
 
 
@@ -707,6 +714,62 @@ async def post_global_message(username: str = Form(...), message: str = Form(...
     )
     await broadcast_states()
     return {"chat": list(global_messages)}
+
+
+@app.get("/api/party-board")
+async def get_party_board():
+    return {"entries": party_board_snapshot()}
+
+
+@app.post("/api/party-board")
+async def post_party_board_entry(
+    username: str = Form(...),
+    activity: str = Form(...),
+    message: str = Form(...),
+):
+    username = username.strip()
+    activity = activity.strip()
+    content = message.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if len(activity) < 3:
+        return JSONResponse({"error": "Activité trop courte"}, status_code=422)
+    if len(activity) > 40:
+        return JSONResponse({"error": "Activité trop longue (40 max)"}, status_code=422)
+    if len(content) < 6:
+        return JSONResponse({"error": "Message trop court (6 minimum)"}, status_code=422)
+    if len(content) > 220:
+        return JSONResponse({"error": "Message trop long (220 max)"}, status_code=422)
+
+    now = datetime.now(timezone.utc).isoformat()
+    party_board.appendleft(
+        {
+            "author": username,
+            "activity": activity,
+            "message": content,
+            "created_at": now,
+        }
+    )
+
+    await broadcast_states()
+    return {"entries": party_board_snapshot()}
+
+
+@app.delete("/api/party-board")
+async def delete_party_board_entries(username: str):
+    username = username.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    kept_entries = [entry for entry in party_board if entry["author"] != username]
+    if len(kept_entries) == len(party_board):
+        return JSONResponse({"error": "Aucune annonce à supprimer"}, status_code=404)
+
+    party_board.clear()
+    party_board.extend(kept_entries)
+    await broadcast_states()
+    return {"entries": party_board_snapshot()}
 
 
 @app.websocket("/ws")
