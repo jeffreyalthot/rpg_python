@@ -28,6 +28,11 @@ const guildRankingEl = document.getElementById('guildRanking');
 const guildChatEl = document.getElementById('guildChat');
 const guildMessageInput = document.getElementById('guildMessage');
 const sendGuildMessageButton = document.getElementById('sendGuildMessageButton');
+const guildEventTitleInput = document.getElementById('guildEventTitle');
+const guildEventStartsAtInput = document.getElementById('guildEventStartsAt');
+const guildEventNoteInput = document.getElementById('guildEventNote');
+const createGuildEventButton = document.getElementById('createGuildEventButton');
+const guildEventsEl = document.getElementById('guildEvents');
 const globalChatEl = document.getElementById('globalChat');
 const globalMessageInput = document.getElementById('globalMessage');
 const sendGlobalMessageButton = document.getElementById('sendGlobalMessageButton');
@@ -92,6 +97,7 @@ let worldState = null;
 let worldPositions = new Map();
 let currentGuild = null;
 let guildChatMessages = [];
+let guildEvents = [];
 let raidState = null;
 let contractState = null;
 let globalChatMessages = [];
@@ -233,6 +239,7 @@ function renderMenu() {
         statusEl.textContent = 'Déconnecté.';
         currentGuild = null;
         guildChatMessages = [];
+        guildEvents = [];
         globalChatMessages = [];
         partyBoardEntries = [];
         communityEvents = [];
@@ -242,6 +249,7 @@ function renderMenu() {
         moderationState = null;
         renderGuildStatus();
         renderGuildChat();
+        renderGuildEvents();
         renderGlobalChat();
         renderPartyBoard();
         renderCommunityEvents();
@@ -463,6 +471,41 @@ function renderGuildChat() {
 }
 
 
+
+
+
+function renderGuildEvents() {
+  if (!guildEventsEl) {
+    return;
+  }
+
+  guildEventsEl.innerHTML = '';
+  if (!guildEvents.length) {
+    guildEventsEl.innerHTML = `<li>${currentGuild ? 'Aucune session planifiée.' : 'Rejoignez une guilde pour débloquer le calendrier.'}</li>`;
+    return;
+  }
+
+  guildEvents.forEach((entry) => {
+    const li = document.createElement('li');
+    const startsAt = new Date(entry.starts_at).toLocaleString();
+    li.innerHTML = `<strong>${entry.title}</strong> • ${startsAt}<br>${entry.note || 'Sans description'}<br>RSVP: ✅ ${entry.attending_count} • ❔ ${entry.maybe_count} • ❌ ${entry.declined_count}`;
+
+    if (username) {
+      const controls = document.createElement('div');
+      controls.className = 'guild-buttons';
+      ['attending', 'maybe', 'declined'].forEach((choice) => {
+        const button = buttonLabel(choice === 'attending' ? 'Présent' : choice === 'maybe' ? 'Peut-être' : 'Absent');
+        button.addEventListener('click', async () => {
+          await rsvpGuildEvent(entry.id, choice);
+        });
+        controls.appendChild(button);
+      });
+      li.appendChild(controls);
+    }
+
+    guildEventsEl.appendChild(li);
+  });
+}
 
 function renderFriendsPanel() {
   if (!friendsListEl || !incomingFriendRequestsEl || !outgoingFriendRequestsEl) return;
@@ -1045,6 +1088,68 @@ async function launchPartyGroup(entryId) {
 }
 
 
+
+
+async function createGuildEvent() {
+  if (!username || !guildEventTitleInput || !guildEventStartsAtInput || !guildEventNoteInput) {
+    return;
+  }
+
+  const title = guildEventTitleInput.value.trim();
+  const startsAtRaw = guildEventStartsAtInput.value;
+  const note = guildEventNoteInput.value.trim();
+
+  if (title.length < 4) {
+    statusEl.textContent = 'Le titre de session doit contenir au moins 4 caractères.';
+    return;
+  }
+  if (!startsAtRaw) {
+    statusEl.textContent = 'Sélectionnez une date de session.';
+    return;
+  }
+
+  const startsAt = new Date(startsAtRaw).toISOString();
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('title', title);
+  formData.append('starts_at', startsAt);
+  formData.append('note', note);
+
+  const response = await fetch('/api/guilds/events', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Impossible de planifier la session.';
+    return;
+  }
+
+  guildEvents = data.events || [];
+  guildEventTitleInput.value = '';
+  guildEventNoteInput.value = '';
+  renderGuildEvents();
+  statusEl.textContent = 'Session de guilde planifiée.';
+}
+
+async function rsvpGuildEvent(eventId, choice) {
+  if (!username) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('event_id', String(eventId));
+  formData.append('response', choice);
+
+  const response = await fetch('/api/guilds/events/rsvp', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'RSVP impossible.';
+    return;
+  }
+
+  guildEvents = data.events || [];
+  renderGuildEvents();
+}
+
 async function sendGlobalMessage() {
   if (!username || !globalMessageInput) {
     return;
@@ -1318,8 +1423,10 @@ async function createOrJoinGuild(mode) {
 
   currentGuild = data.guild;
   guildChatMessages = data.chat || [];
+  guildEvents = data.events || [];
   renderGuildStatus();
   renderGuildChat();
+  renderGuildEvents();
   renderGlobalChat();
   renderRaid();
   renderContracts();
@@ -1346,8 +1453,10 @@ async function leaveGuild() {
 
   currentGuild = null;
   guildChatMessages = [];
+  guildEvents = [];
   renderGuildStatus();
   renderGuildChat();
+  renderGuildEvents();
   renderGlobalChat();
   renderRaid();
   renderContracts();
@@ -1381,9 +1490,11 @@ async function sendGuildMessage() {
 
   currentGuild = data.guild;
   guildChatMessages = data.chat || [];
+  guildEvents = data.events || [];
   guildMessageInput.value = '';
   renderGuildStatus();
   renderGuildChat();
+  renderGuildEvents();
 }
 
 function renderPlayers(players) {
@@ -1815,11 +1926,15 @@ ws.onmessage = (event) => {
     moderationState = data.moderation || moderationState;
     partyBoardEntries = data.party_board || partyBoardEntries;
     communityEvents = data.events || communityEvents;
+    if (data.guild_events) {
+      guildEvents = (currentGuild && data.guild_events[currentGuild]) ? data.guild_events[currentGuild] : guildEvents;
+    }
     renderRaid();
     renderContracts();
     renderGlobalChat();
     renderPartyBoard();
     renderCommunityEvents();
+    renderGuildEvents();
     renderDuelStats();
     renderFriendsPanel();
     renderDailyChallenge();
@@ -1867,6 +1982,7 @@ loginForm.addEventListener('submit', async (event) => {
   syncHero(data.hero);
   currentGuild = data.guild || null;
   guildChatMessages = data.guild_chat || [];
+  guildEvents = data.guild_events || [];
   globalChatMessages = data.global_chat || [];
   moderationState = data.moderation || moderationState;
   partyBoardEntries = data.party_board || [];
@@ -1897,6 +2013,7 @@ loginForm.addEventListener('submit', async (event) => {
   renderActionPanel();
   renderGuildStatus();
   renderGuildChat();
+  renderGuildEvents();
   renderGlobalChat();
   renderPartyBoard();
   renderCommunityEvents();
@@ -1949,6 +2066,10 @@ sendGuildMessageButton?.addEventListener('click', async () => {
   await sendGuildMessage();
 });
 
+createGuildEventButton?.addEventListener('click', async () => {
+  await createGuildEvent();
+});
+
 sendGlobalMessageButton?.addEventListener('click', async () => {
   await sendGlobalMessage();
 });
@@ -1995,6 +2116,7 @@ renderQuests();
 renderActionPanel();
 renderGuildStatus();
 renderGuildChat();
+renderGuildEvents();
 renderGlobalChat();
 renderPartyBoard();
 renderCommunityEvents();
