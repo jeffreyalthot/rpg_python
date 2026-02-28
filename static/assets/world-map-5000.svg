@@ -1,0 +1,25 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='5000' height='5000' viewBox='0 0 5000 5000'>
+  <rect width='5000' height='5000' fill='#052e16'/>
+  <path d='M0 3800 C900 3300 1800 4200 2800 3600 C3600 3100 4300 3900 5000 3400 L5000 5000 L0 5000Z' fill='#14532d'/>
+  <path d='M0 0 L5000 0 L5000 1200 C4200 1500 3300 600 2400 900 C1500 1200 700 700 0 1100Z' fill='#0c4a6e' opacity='0.8'/>
+
+  <circle cx='560' cy='880' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='610' y='835' fill='white' font-size='44'>Village départ 1</text>
+  <circle cx='1020' cy='1280' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='1070' y='1235' fill='white' font-size='44'>Village départ 2</text>
+  <circle cx='1600' cy='920' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='1650' y='875' fill='white' font-size='44'>Village départ 3</text>
+  <circle cx='2120' cy='1420' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='2170' y='1375' fill='white' font-size='44'>Village départ 4</text>
+  <circle cx='2580' cy='1100' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='2630' y='1055' fill='white' font-size='44'>Village départ 5</text>
+  <circle cx='3000' cy='1720' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='3050' y='1675' fill='white' font-size='44'>Village départ 6</text>
+  <circle cx='3400' cy='1260' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='3450' y='1215' fill='white' font-size='44'>Village départ 7</text>
+  <circle cx='3860' cy='2140' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='3910' y='2095' fill='white' font-size='44'>Village départ 8</text>
+  <circle cx='4260' cy='1680' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='4310' y='1635' fill='white' font-size='44'>Village départ 9</text>
+  <circle cx='4580' cy='2480' r='38' fill='#0ea5e9' stroke='white' stroke-width='6'/><text x='4630' y='2435' fill='white' font-size='44'>Village départ 10</text>
+
+  <rect x='40' y='40' width='1460' height='420' fill='rgba(2,6,23,.65)' stroke='#94a3b8'/>
+  <text x='90' y='135' fill='white' font-size='72'>Aetheria • Carte 5000 x 5000</text>
+  <text x='90' y='220' fill='#bfdbfe' font-size='46'>Points bleus: villages de départ</text>
+  <text x='90' y='295' fill='#fecaca' font-size='46'>Rouge: zones de combat, Vert: plaines</text>
+
+  <circle cx='880' cy='3600' r='120' fill='#b91c1c'/><text x='1040' y='3620' fill='white' font-size='48'>Arène des Cendres</text>
+  <circle cx='2250' cy='2980' r='120' fill='#b91c1c'/><text x='2410' y='3000' fill='white' font-size='48'>Faille Écarlate</text>
+  <circle cx='3680' cy='3320' r='120' fill='#b91c1c'/><text x='3840' y='3340' fill='white' font-size='48'>Front du Tonnerre</text>
+</svg>

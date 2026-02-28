@@ -222,6 +222,41 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "max_pa": MAX_ACTION_POINTS})
 
 
+@app.get("/play", response_class=HTMLResponse)
+async def play(request: Request):
+    return templates.TemplateResponse("play.html", {"request": request, "max_pa": MAX_ACTION_POINTS})
+
+
+@app.get("/auth", response_class=HTMLResponse)
+async def auth_page(request: Request):
+    return templates.TemplateResponse("auth.html", {"request": request})
+
+
+@app.get("/character", response_class=HTMLResponse)
+async def character_page(request: Request):
+    return templates.TemplateResponse("character.html", {"request": request})
+
+
+@app.get("/world", response_class=HTMLResponse)
+async def world_page(request: Request):
+    return templates.TemplateResponse("world.html", {"request": request})
+
+
+@app.get("/combat", response_class=HTMLResponse)
+async def combat_page(request: Request):
+    return templates.TemplateResponse("combat.html", {"request": request})
+
+
+@app.get("/social", response_class=HTMLResponse)
+async def social_page(request: Request):
+    return templates.TemplateResponse("social.html", {"request": request})
+
+
+@app.get("/game", response_class=HTMLResponse)
+async def game_alias(request: Request):
+    return templates.TemplateResponse("play.html", {"request": request, "max_pa": MAX_ACTION_POINTS})
+
+
 @app.get("/api/options")
 async def get_options():
     return {
