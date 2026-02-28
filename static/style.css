@@ -170,6 +170,15 @@ input {
   background: #020617;
 }
 
+#localMap {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid #475569;
+  border-radius: .4rem;
+  background: #020617;
+  margin-top: .7rem;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -191,6 +200,27 @@ input {
 .dot.village { background: #22c55e; }
 .dot.battle { background: #ef4444; }
 .dot.merchant { background: #facc15; }
+.dot.hero { background: #a855f7; }
+
+.tile-image {
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 16 / 6;
+  object-fit: cover;
+  border: 1px solid #475569;
+  border-radius: .4rem;
+  background: #020617;
+}
+
+.tile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+}
+
+.tile-actions button {
+  min-width: 10rem;
+}
 
 .world-stats {
   margin-top: .8rem;
