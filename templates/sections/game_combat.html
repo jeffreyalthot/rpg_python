@@ -1,0 +1,44 @@
+<article class="card">
+  <h2>Duel JcJ (multijoueur)</h2>
+  <p>Choisissez un adversaire connecté. Le ratio de VIT détermine les combos d'attaque avant contre-attaque.</p>
+  <p id="duelPersonalStats" class="status">Bilan personnel: 0 victoire / 0 défaite.</p>
+  <div class="guild-controls">
+    <select id="duelOpponent"></select>
+    <button id="duelButton" type="button" disabled>Défier (1 PA)</button>
+  </div>
+  <ul id="duelLog" class="activity-log"></ul>
+  <h3>Classement JcJ saison en cours</h3>
+  <ul id="duelLeaderboard" class="styled-list"></ul>
+</article>
+
+<article class="card">
+  <h2>Journal d'aventure</h2>
+  <ul id="activityLog" class="activity-log"></ul>
+</article>
+
+<article class="card">
+  <h2>Raid de guilde mondial</h2>
+  <p id="raidStatus" class="status">Connectez-vous et rejoignez une guilde pour contribuer au raid.</p>
+  <button id="raidAttackButton" type="button" disabled>Attaquer le boss (1 PA)</button>
+  <h3 id="raidBossName">Boss inconnu</h3>
+  <div class="pa-bar-wrapper raid-bar-wrapper">
+    <div id="raidBossBar" class="pa-bar raid-bar"></div>
+  </div>
+  <p id="raidBossHp">PV: -- / --</p>
+  <h3>Classement des guildes</h3>
+  <ul id="raidRanking" class="styled-list"></ul>
+</article>
+
+<article class="card">
+  <h2>Contrat communautaire</h2>
+  <p id="contractStatus" class="status">Connectez-vous pour participer au contrat de saison.</p>
+  <h3 id="contractTitle">Mission inconnue</h3>
+  <p id="contractDescription">Chargement...</p>
+  <div class="pa-bar-wrapper raid-bar-wrapper">
+    <div id="contractBar" class="pa-bar"></div>
+  </div>
+  <p id="contractProgress">Progression: -- / --</p>
+  <button id="contractContributeButton" type="button" disabled>Contribuer (1 PA)</button>
+  <h3>Top contributeurs</h3>
+  <ul id="contractContributors" class="styled-list"></ul>
+</article>

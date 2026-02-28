@@ -435,3 +435,49 @@ select {
   border: 1px solid #475569;
   border-radius: .6rem;
 }
+
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #86efac;
+  font-size: .78rem;
+  margin: 0 0 .2rem;
+}
+
+.game-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.game-title-block h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.game-title-block .status {
+  margin: .35rem 0 0;
+}
+
+.card {
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.25);
+}
+
+.portal-tile,
+.card {
+  transition: transform .2s ease, border-color .2s ease;
+}
+
+.portal-tile:hover,
+.card:hover {
+  transform: translateY(-2px);
+  border-color: #64748b;
+}
+
+@media (max-width: 840px) {
+  .game-header {
+    grid-template-columns: 1fr;
+  }
+}
