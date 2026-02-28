@@ -58,6 +58,12 @@ CHAT_MIN_INTERVAL_SECONDS = 3
 CHAT_BLOCKED_WORDS = ("merde", "con", "connard", "pute")
 chat_last_message_at: Dict[str, datetime] = {}
 chat_last_message_text: Dict[str, str] = {}
+chat_reports: Dict[str, dict] = {}
+chat_mutes_until: Dict[str, datetime] = {}
+CHAT_REPORT_THRESHOLD = 3
+CHAT_MUTE_DURATION_MINUTES = 30
+CHAT_REPORT_REASON_MIN_LENGTH = 8
+CHAT_REPORT_REASON_MAX_LENGTH = 160
 raid_boss_names = ["Hydre Astrale", "Titan de Cendre", "Liche du Néant", "Golem Tempête"]
 raid_state = {
     "name": raid_boss_names[0],
@@ -382,6 +388,19 @@ def sanitize_chat_message(message: str) -> str:
 
 
 def validate_chat_message(username: str, content: str) -> JSONResponse | None:
+    mute_until = chat_mutes_until.get(username)
+    if mute_until and mute_until > datetime.now(timezone.utc):
+        remaining_seconds = int((mute_until - datetime.now(timezone.utc)).total_seconds())
+        return JSONResponse(
+            {
+                "error": f"Canal verrouillé: vous pourrez parler dans {max(1, remaining_seconds)}s",
+                "muted_until": mute_until.isoformat(),
+            },
+            status_code=423,
+        )
+    if mute_until and mute_until <= datetime.now(timezone.utc):
+        chat_mutes_until.pop(username, None)
+
     now = datetime.now(timezone.utc)
     last_sent_at = chat_last_message_at.get(username)
     if last_sent_at is not None:
@@ -403,6 +422,25 @@ def validate_chat_message(username: str, content: str) -> JSONResponse | None:
     chat_last_message_at[username] = now
     chat_last_message_text[username] = content
     return None
+
+
+def chat_moderation_snapshot(username: str | None = None) -> dict:
+    payload = {
+        "report_threshold": CHAT_REPORT_THRESHOLD,
+        "mute_duration_minutes": CHAT_MUTE_DURATION_MINUTES,
+    }
+    if username:
+        muted_until = chat_mutes_until.get(username)
+        active = muted_until is not None and muted_until > datetime.now(timezone.utc)
+        if muted_until is not None and muted_until <= datetime.now(timezone.utc):
+            chat_mutes_until.pop(username, None)
+            muted_until = None
+            active = False
+        payload["personal"] = {
+            "is_muted": active,
+            "muted_until": muted_until.isoformat() if muted_until else None,
+        }
+    return payload
 
 
 async def broadcast_states() -> None:
@@ -432,6 +470,7 @@ async def broadcast_states() -> None:
         "events": community_events_snapshot(),
         "daily": daily_challenge_snapshot(),
         "commendations": commendations_snapshot(),
+        "moderation": chat_moderation_snapshot(),
     }
     disconnected: Set[WebSocket] = set()
     for ws in connections:
@@ -590,6 +629,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "presence": player_presence[username],
         "daily": daily_challenge_snapshot(username),
         "commendations": commendations_snapshot(username),
+        "moderation": chat_moderation_snapshot(username),
     }
 
 
@@ -1095,6 +1135,71 @@ async def post_global_message(username: str = Form(...), message: str = Form(...
     add_daily_progress(username, "social")
     await broadcast_states()
     return {"chat": list(global_messages)}
+
+
+@app.post("/api/chat/report")
+async def report_chat_message(username: str = Form(...), target_username: str = Form(...), reason: str = Form(...)):
+    username = username.strip()
+    target_username = target_username.strip()
+    reason = reason.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if target_username not in players:
+        return JSONResponse({"error": "Cible inconnue"}, status_code=404)
+    if username == target_username:
+        return JSONResponse({"error": "Impossible de signaler votre propre message"}, status_code=422)
+    if len(reason) < CHAT_REPORT_REASON_MIN_LENGTH:
+        return JSONResponse(
+            {"error": f"Motif trop court ({CHAT_REPORT_REASON_MIN_LENGTH} min)"},
+            status_code=422,
+        )
+    if len(reason) > CHAT_REPORT_REASON_MAX_LENGTH:
+        return JSONResponse(
+            {"error": f"Motif trop long ({CHAT_REPORT_REASON_MAX_LENGTH} max)"},
+            status_code=422,
+        )
+
+    report_state = chat_reports.setdefault(target_username, {"reporters": set(), "reasons": deque(maxlen=8)})
+    if username in report_state["reporters"]:
+        return JSONResponse({"error": "Vous avez déjà signalé ce joueur récemment"}, status_code=409)
+
+    report_state["reporters"].add(username)
+    report_state["reasons"].append(
+        {
+            "reporter": username,
+            "reason": reason,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    muted = False
+    if len(report_state["reporters"]) >= CHAT_REPORT_THRESHOLD:
+        muted = True
+        mute_until = datetime.now(timezone.utc) + timedelta(minutes=CHAT_MUTE_DURATION_MINUTES)
+        chat_mutes_until[target_username] = mute_until
+        report_state["reporters"] = set()
+        global_messages.append(
+            {
+                "author": "Modération",
+                "message": f"{target_username} est temporairement muet suite à plusieurs signalements.",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        push_community_event(
+            "moderation",
+            f"Le canal mondial applique un mute temporaire à {target_username} après signalements.",
+            actor=target_username,
+        )
+        await broadcast_states()
+
+    return {
+        "target": target_username,
+        "reports": len(report_state["reporters"]),
+        "threshold": CHAT_REPORT_THRESHOLD,
+        "muted": muted,
+        "moderation": chat_moderation_snapshot(username),
+    }
 
 
 @app.get("/api/party-board")

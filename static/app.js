@@ -31,6 +31,7 @@ const sendGuildMessageButton = document.getElementById('sendGuildMessageButton')
 const globalChatEl = document.getElementById('globalChat');
 const globalMessageInput = document.getElementById('globalMessage');
 const sendGlobalMessageButton = document.getElementById('sendGlobalMessageButton');
+const reportReasonInput = document.getElementById('reportReason');
 const partyActivityInput = document.getElementById('partyActivity');
 const partyMessageInput = document.getElementById('partyMessage');
 const partyRolesInput = document.getElementById('partyRoles');
@@ -99,6 +100,7 @@ let partyBoardEntries = [];
 let communityEvents = [];
 let socialState = { friends: [], incoming_requests: [], outgoing_requests: [] };
 let dailyState = null;
+let moderationState = null;
 
 const hero = {
   level: 1,
@@ -231,6 +233,7 @@ function renderMenu() {
         communityEvents = [];
         socialState = { friends: [], incoming_requests: [], outgoing_requests: [] };
         dailyState = null;
+        moderationState = null;
         renderGuildStatus();
         renderGuildChat();
         renderGlobalChat();
@@ -583,7 +586,22 @@ function renderGlobalChat() {
   [...globalChatMessages].reverse().forEach((entry) => {
     const li = document.createElement('li');
     const time = new Date(entry.created_at).toLocaleTimeString();
-    li.textContent = `[${time}] ${entry.author}: ${entry.message}`;
+
+    const text = document.createElement('span');
+    text.textContent = `[${time}] ${entry.author}: ${entry.message}`;
+    li.appendChild(text);
+
+    if (username && entry.author && entry.author !== username && entry.author !== 'Système' && entry.author !== 'Modération') {
+      const reportButton = document.createElement('button');
+      reportButton.type = 'button';
+      reportButton.className = 'inline-action';
+      reportButton.textContent = 'Signaler';
+      reportButton.addEventListener('click', async () => {
+        await reportGlobalMessage(entry.author);
+      });
+      li.appendChild(reportButton);
+    }
+
     globalChatEl.appendChild(li);
   });
 }
@@ -870,6 +888,41 @@ async function sendGlobalMessage() {
   globalChatMessages = data.chat || [];
   globalMessageInput.value = '';
   renderGlobalChat();
+}
+
+async function reportGlobalMessage(targetUsername) {
+  if (!username || !targetUsername) {
+    return;
+  }
+
+  const reason = reportReasonInput?.value?.trim() || 'Comportement toxique sur le canal mondial';
+  if (reason.length < 8) {
+    statusEl.textContent = 'Le motif de signalement doit contenir au moins 8 caractères.';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('target_username', targetUsername);
+  formData.append('reason', reason);
+
+  const response = await fetch('/api/chat/report', { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Signalement impossible.';
+    return;
+  }
+
+  moderationState = data.moderation || moderationState;
+  const count = Number(data.reports || 0);
+  const threshold = Number(data.threshold || 3);
+  statusEl.textContent = data.muted
+    ? `${targetUsername} est temporairement muet après modération automatique.`
+    : `Signalement envoyé (${count}/${threshold}) contre ${targetUsername}.`;
+  if (reportReasonInput) {
+    reportReasonInput.value = '';
+  }
 }
 
 function renderGuildStatus() {
@@ -1572,6 +1625,7 @@ ws.onmessage = (event) => {
     }
     duelLeaderboard = data.duels || duelLeaderboard;
     globalChatMessages = data.global_chat || globalChatMessages;
+    moderationState = data.moderation || moderationState;
     partyBoardEntries = data.party_board || partyBoardEntries;
     communityEvents = data.events || communityEvents;
     renderRaid();
@@ -1626,6 +1680,7 @@ loginForm.addEventListener('submit', async (event) => {
   currentGuild = data.guild || null;
   guildChatMessages = data.guild_chat || [];
   globalChatMessages = data.global_chat || [];
+  moderationState = data.moderation || moderationState;
   partyBoardEntries = data.party_board || [];
   communityEvents = data.events || [];
   myDuelStats = data.duel_stats || myDuelStats;
