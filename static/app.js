@@ -36,6 +36,7 @@ const partyMessageInput = document.getElementById('partyMessage');
 const postPartyButton = document.getElementById('postPartyButton');
 const clearPartyButton = document.getElementById('clearPartyButton');
 const partyBoardEl = document.getElementById('partyBoard');
+const communityEventsEl = document.getElementById('communityEvents');
 const raidStatusEl = document.getElementById('raidStatus');
 const raidAttackButton = document.getElementById('raidAttackButton');
 const raidBossNameEl = document.getElementById('raidBossName');
@@ -83,6 +84,7 @@ let connectedPlayers = [];
 let duelLeaderboard = [];
 let myDuelStats = { wins: 0, losses: 0 };
 let partyBoardEntries = [];
+let communityEvents = [];
 
 const hero = {
   level: 1,
@@ -212,10 +214,12 @@ function renderMenu() {
         guildChatMessages = [];
         globalChatMessages = [];
         partyBoardEntries = [];
+        communityEvents = [];
         renderGuildStatus();
         renderGuildChat();
         renderGlobalChat();
         renderPartyBoard();
+        renderCommunityEvents();
         renderRaid();
         renderContracts();
         renderMenu();
@@ -466,6 +470,26 @@ function renderPartyBoard() {
     const time = new Date(entry.created_at).toLocaleTimeString();
     li.textContent = `[${time}] ${entry.author} • ${entry.activity} — ${entry.message}`;
     partyBoardEl.appendChild(li);
+  });
+}
+
+function renderCommunityEvents() {
+  if (!communityEventsEl) {
+    return;
+  }
+
+  communityEventsEl.innerHTML = '';
+  if (!communityEvents.length) {
+    communityEventsEl.innerHTML = '<li>Aucun événement marquant pour le moment.</li>';
+    return;
+  }
+
+  communityEvents.slice(0, 14).forEach((entry) => {
+    const li = document.createElement('li');
+    const time = new Date(entry.created_at).toLocaleTimeString();
+    const category = (entry.category || 'info').toUpperCase();
+    li.textContent = `[${time}] [${category}] ${entry.message}`;
+    communityEventsEl.appendChild(li);
   });
 }
 
@@ -1243,10 +1267,12 @@ ws.onmessage = (event) => {
     duelLeaderboard = data.duels || duelLeaderboard;
     globalChatMessages = data.global_chat || globalChatMessages;
     partyBoardEntries = data.party_board || partyBoardEntries;
+    communityEvents = data.events || communityEvents;
     renderRaid();
     renderContracts();
     renderGlobalChat();
     renderPartyBoard();
+    renderCommunityEvents();
     renderDuelStats();
   }
 };
@@ -1293,6 +1319,7 @@ loginForm.addEventListener('submit', async (event) => {
   guildChatMessages = data.guild_chat || [];
   globalChatMessages = data.global_chat || [];
   partyBoardEntries = data.party_board || [];
+  communityEvents = data.events || [];
   myDuelStats = data.duel_stats || myDuelStats;
   duelLeaderboard = data.duel_leaderboard || duelLeaderboard;
   syncProfile(data.profile);
@@ -1318,6 +1345,7 @@ loginForm.addEventListener('submit', async (event) => {
   renderGuildChat();
   renderGlobalChat();
   renderPartyBoard();
+  renderCommunityEvents();
   renderRaid();
   renderContracts();
   refreshGuilds();
@@ -1403,6 +1431,7 @@ renderGuildStatus();
 renderGuildChat();
 renderGlobalChat();
 renderPartyBoard();
+renderCommunityEvents();
 renderRaid();
 renderContracts();
 renderDuelOpponents();
