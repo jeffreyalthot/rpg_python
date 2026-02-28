@@ -15,6 +15,7 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - Nouvelle **bourse de groupes (LFG)**: publication d'annonces rapides (activité + message) pour recruter des joueurs en direct.
 - Nouveau système **Alliés & invitations**: envoi/acceptation d'invitations, suivi des amis en ligne et retrait d'alliés depuis le hub de jeu.
 - Ajout d'un système **"Je rejoins"** sur chaque annonce LFG avec compteur d'intéressés synchronisé en temps réel.
+- Ajout d'un **ready check LFG**: les membres d'un groupe peuvent se marquer prêts, et le leader peut lancer l'escouade uniquement lorsque tout le monde est prêt.
 - Nouveau **fil des chroniques communautaires** en temps réel: met en avant les victoires en duel, exploits de raid, saisons de contrat et mouvements de guildes pour dynamiser la rétention.
 - Nouveau **classement JcJ saisonnier** avec suivi des victoires/défaites et top 10 diffusé en temps réel.
 - Nouveau **tableau de contrats communautaires**: tous les joueurs peuvent contribuer en PA pour débloquer des récompenses de saison et un classement de contributeurs en direct.

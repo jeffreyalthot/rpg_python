@@ -627,21 +627,29 @@ function renderPartyBoard() {
   partyBoardEntries.slice(0, 12).forEach((entry) => {
     const li = document.createElement('li');
     const time = new Date(entry.created_at).toLocaleTimeString();
-    const interestedCount = Number(entry.interested_count || 0);
-    const isInterested = Array.isArray(entry.interested_players) && username
-      ? entry.interested_players.includes(username)
-      : false;
+    const interestedPlayers = Array.isArray(entry.interested_players) ? entry.interested_players : [];
+    const readyPlayers = Array.isArray(entry.ready_players) ? entry.ready_players : [];
+    const interestedCount = Number(entry.interested_count || interestedPlayers.length || 0);
+    const readyCount = Number(entry.ready_count || readyPlayers.length || 0);
+    const isInterested = username ? interestedPlayers.includes(username) : false;
+    const isReady = username ? readyPlayers.includes(username) : false;
 
     const minLevel = Number(entry.min_level || 1);
     const maxMembers = Number(entry.max_members || 4);
     const roles = entry.roles || 'Tous rôles';
     const isFull = Boolean(entry.is_full);
+    const isLeader = username && username === entry.author;
+    const isLaunched = Boolean(entry.is_launched);
 
     const info = document.createElement('span');
-    info.textContent = `[${time}] ${entry.author} • ${entry.activity} [${roles}] — ${entry.message} (niv. min ${minLevel}, ${interestedCount}/${maxMembers})`;
+    info.textContent = `[${time}] ${entry.author} • ${entry.activity} [${roles}] — ${entry.message} (niv. min ${minLevel}, ${interestedCount}/${maxMembers}, prêts ${readyCount}/${interestedCount})`;
     li.appendChild(info);
 
-    if (isFull && !isInterested) {
+    if (isLaunched) {
+      const launchBadge = document.createElement('strong');
+      launchBadge.textContent = ' GROUPE LANCÉ';
+      li.appendChild(launchBadge);
+    } else if (isFull && !isInterested) {
       const fullBadge = document.createElement('strong');
       fullBadge.textContent = ' COMPLET';
       li.appendChild(fullBadge);
@@ -652,11 +660,35 @@ function renderPartyBoard() {
       button.type = 'button';
       button.className = 'inline-action';
       button.textContent = isInterested ? 'Se retirer' : 'Rejoindre';
-      button.disabled = isFull && !isInterested;
+      button.disabled = (isFull && !isInterested) || isLaunched;
       button.addEventListener('click', async () => {
         await togglePartyInterest(entry.id);
       });
       li.appendChild(button);
+
+      if (isInterested) {
+        const readyButton = document.createElement('button');
+        readyButton.type = 'button';
+        readyButton.className = 'inline-action';
+        readyButton.textContent = isReady ? 'Annuler prêt' : 'Prêt';
+        readyButton.disabled = isLaunched;
+        readyButton.addEventListener('click', async () => {
+          await togglePartyReady(entry.id);
+        });
+        li.appendChild(readyButton);
+      }
+
+      if (isLeader) {
+        const launchButton = document.createElement('button');
+        launchButton.type = 'button';
+        launchButton.className = 'inline-action';
+        launchButton.textContent = isLaunched ? 'Lancé' : 'Lancer groupe';
+        launchButton.disabled = isLaunched;
+        launchButton.addEventListener('click', async () => {
+          await launchPartyGroup(entry.id);
+        });
+        li.appendChild(launchButton);
+      }
     }
 
     partyBoardEl.appendChild(li);
@@ -959,6 +991,59 @@ async function togglePartyInterest(entryId) {
   statusEl.textContent = label;
   addLog(label);
 }
+
+async function togglePartyReady(entryId) {
+  if (!username) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('entry_id', String(entryId));
+
+  const response = await fetch('/api/party-board/ready', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    const pending = Array.isArray(data.missing_ready) && data.missing_ready.length
+      ? ` (${data.missing_ready.join(', ')})`
+      : '';
+    statusEl.textContent = (data.error || 'Impossible de mettre à jour votre statut prêt.') + pending;
+    return;
+  }
+
+  partyBoardEntries = data.entries || [];
+  renderPartyBoard();
+  const label = data.action === 'ready' ? 'Vous êtes prêt pour ce groupe.' : "Vous n'êtes plus marqué prêt.";
+  statusEl.textContent = label;
+  addLog(label);
+}
+
+async function launchPartyGroup(entryId) {
+  if (!username) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('entry_id', String(entryId));
+
+  const response = await fetch('/api/party-board/launch', { method: 'POST', body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    const pending = Array.isArray(data.missing_ready) && data.missing_ready.length
+      ? ` Joueurs en attente: ${data.missing_ready.join(', ')}.`
+      : '';
+    statusEl.textContent = (data.error || 'Impossible de lancer ce groupe.') + pending;
+    return;
+  }
+
+  partyBoardEntries = data.entries || [];
+  renderPartyBoard();
+  const message = 'Groupe lancé ! Tous les membres sont prêts.';
+  statusEl.textContent = message;
+  addLog(message);
+}
+
 
 async function sendGlobalMessage() {
   if (!username || !globalMessageInput) {
