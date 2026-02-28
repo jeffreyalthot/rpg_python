@@ -94,6 +94,9 @@ daily_state = {
     "completions": {},
     "last_reset_at": datetime.now(timezone.utc).isoformat(),
 }
+commendations_received: Dict[str, int] = {}
+commendations_log: Dict[str, dict] = {}
+MAX_DAILY_COMMENDATIONS = 3
 PRESENCE_ALLOWED_STATUSES = {"online", "looking_for_group", "raiding", "dueling", "afk"}
 PRESENCE_NOTE_MAX_LENGTH = 60
 
@@ -285,6 +288,43 @@ def daily_challenge_snapshot(username: str | None = None) -> dict:
     return payload
 
 
+def commendations_snapshot(username: str | None = None) -> dict:
+    ranking = [
+        {"username": player, "received": total}
+        for player, total in sorted(
+            commendations_received.items(),
+            key=lambda item: (-item[1], item[0].lower()),
+        )
+        if total > 0
+    ]
+
+    payload = {
+        "daily_limit": MAX_DAILY_COMMENDATIONS,
+        "leaderboard": ranking[:10],
+    }
+
+    if username:
+        today = datetime.now(timezone.utc).date().isoformat()
+        actor_state = commendations_log.get(username, {"date": today, "targets": set()})
+        if actor_state["date"] != today:
+            actor_state = {"date": today, "targets": set()}
+
+        payload["personal"] = {
+            "remaining": max(0, MAX_DAILY_COMMENDATIONS - len(actor_state["targets"])),
+            "already_commended": sorted(actor_state["targets"]),
+            "received": commendations_received.get(username, 0),
+        }
+
+    return payload
+
+
+def get_or_create_commendation_state(username: str) -> dict:
+    today = datetime.now(timezone.utc).date().isoformat()
+    if username not in commendations_log or commendations_log[username]["date"] != today:
+        commendations_log[username] = {"date": today, "targets": set()}
+    return commendations_log[username]
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     init_db()
@@ -391,6 +431,7 @@ async def broadcast_states() -> None:
         "party_board": party_board_snapshot(),
         "events": community_events_snapshot(),
         "daily": daily_challenge_snapshot(),
+        "commendations": commendations_snapshot(),
     }
     disconnected: Set[WebSocket] = set()
     for ws in connections:
@@ -548,6 +589,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "social": social_snapshot(username),
         "presence": player_presence[username],
         "daily": daily_challenge_snapshot(username),
+        "commendations": commendations_snapshot(username),
     }
 
 
@@ -1257,6 +1299,52 @@ async def remove_friend(username: str, target_username: str):
     friendships[target_username].discard(username)
     await broadcast_states()
     return {"social": social_snapshot(username)}
+
+
+@app.get("/api/social/commendations")
+async def get_commendations(username: str | None = None):
+    normalized = username.strip() if username else None
+    if normalized and normalized not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    return commendations_snapshot(normalized)
+
+
+@app.post("/api/social/commend")
+async def commend_player(username: str = Form(...), target_username: str = Form(...), reason: str = Form("")):
+    username = username.strip()
+    target_username = target_username.strip()
+    reason = reason.strip() if isinstance(reason, str) else ""
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if target_username not in players:
+        return JSONResponse({"error": "Joueur cible inconnu"}, status_code=404)
+    if target_username == username:
+        return JSONResponse({"error": "Impossible de se recommander soi-même"}, status_code=422)
+    if len(reason) > 80:
+        return JSONResponse({"error": "Raison trop longue (80 max)"}, status_code=422)
+
+    actor_state = get_or_create_commendation_state(username)
+    if target_username in actor_state["targets"]:
+        return JSONResponse({"error": "Vous avez déjà recommandé ce joueur aujourd'hui"}, status_code=409)
+    if len(actor_state["targets"]) >= MAX_DAILY_COMMENDATIONS:
+        return JSONResponse({"error": "Limite quotidienne de recommandations atteinte"}, status_code=429)
+
+    actor_state["targets"].add(target_username)
+    commendations_received[target_username] = commendations_received.get(target_username, 0) + 1
+    add_daily_progress(username, "social")
+
+    event_message = f"{username} recommande {target_username} pour son esprit d'équipe."
+    if reason:
+        event_message = f"{username} recommande {target_username}: {reason}"
+    push_community_event("social", event_message, actor=username)
+
+    await broadcast_states()
+    return {
+        "target": target_username,
+        "received": commendations_received[target_username],
+        "commendations": commendations_snapshot(username),
+    }
 
 
 @app.websocket("/ws")
