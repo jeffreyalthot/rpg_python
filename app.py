@@ -48,6 +48,21 @@ raid_state = {
     "guild_damage": {},
     "last_reset_at": datetime.now(timezone.utc).isoformat(),
 }
+contracts_pool = [
+    {"title": "Reconstruire la Tour de Vigie", "description": "Livrez des matériaux pour restaurer la défense frontalière."},
+    {"title": "Sécuriser la Route Marchande", "description": "Escortez les caravanes et éliminez les embuscades."},
+    {"title": "Purger les Catacombes", "description": "Repoussez les créatures qui menacent les villages voisins."},
+    {"title": "Rituel des Arcanes", "description": "Collectez des fragments mystiques pour les mages du royaume."},
+]
+contract_state = {
+    "season": 1,
+    "goal": 240,
+    "progress": 0,
+    "title": contracts_pool[0]["title"],
+    "description": contracts_pool[0]["description"],
+    "contributors": {},
+    "last_rotation_at": datetime.now(timezone.utc).isoformat(),
+}
 
 
 def get_village_position(village_name: str) -> tuple[int, int]:
@@ -108,6 +123,34 @@ def duel_leaderboard_snapshot() -> list[dict[str, int | str]]:
     return ranking[:10]
 
 
+def contract_snapshot() -> dict:
+    contributors = [
+        {"username": name, "points": points}
+        for name, points in sorted(contract_state["contributors"].items(), key=lambda item: (-item[1], item[0].lower()))
+    ]
+    return {
+        "season": contract_state["season"],
+        "goal": contract_state["goal"],
+        "progress": contract_state["progress"],
+        "title": contract_state["title"],
+        "description": contract_state["description"],
+        "contributors": contributors,
+        "last_rotation_at": contract_state["last_rotation_at"],
+    }
+
+
+def rotate_contracts() -> None:
+    next_season = contract_state["season"] + 1
+    template = contracts_pool[(next_season - 1) % len(contracts_pool)]
+    contract_state["season"] = next_season
+    contract_state["goal"] = 240 + (next_season - 1) * 40
+    contract_state["progress"] = 0
+    contract_state["title"] = template["title"]
+    contract_state["description"] = template["description"]
+    contract_state["contributors"] = {}
+    contract_state["last_rotation_at"] = datetime.now(timezone.utc).isoformat()
+
+
 def reset_raid(next_level: int) -> None:
     raid_state["level"] = next_level
     raid_state["max_hp"] = 600 + (next_level - 1) * 140
@@ -153,6 +196,7 @@ async def broadcast_states() -> None:
         },
         "guilds": guild_snapshot,
         "raid": raid_snapshot(),
+        "contracts": contract_snapshot(),
         "duels": duel_leaderboard_snapshot(),
         "global_chat": list(global_messages),
     }
@@ -410,6 +454,59 @@ async def get_guilds():
 @app.get("/api/raids/current")
 async def get_current_raid():
     return raid_snapshot()
+
+
+@app.get("/api/contracts/current")
+async def get_current_contract():
+    return contract_snapshot()
+
+
+@app.post("/api/contracts/contribute")
+async def contribute_contract(username: str = Form(...)):
+    username = username.strip()
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    state = normalize_player_state(players[username])
+    if state.action_points <= 0:
+        return JSONResponse({"error": "PA insuffisants"}, status_code=400)
+
+    state.action_points -= 1
+    players[username] = state
+
+    hero = get_or_create_hero(username)
+    contribution = 8 + hero.level + Random(f"contract:{username}:{datetime.now(timezone.utc).isoformat()}").randint(0, 5)
+    contract_state["progress"] += contribution
+    contract_state["contributors"][username] = contract_state["contributors"].get(username, 0) + contribution
+
+    reward = None
+    completed = contract_state["progress"] >= contract_state["goal"]
+    if completed:
+        reward = {
+            "gold": 40 + contract_state["season"] * 5,
+            "xp": 25 + contract_state["season"] * 4,
+            "contract": contract_state["title"],
+        }
+        hero.gold += reward["gold"]
+        hero.xp += reward["xp"]
+        while hero.xp >= 100:
+            hero.xp -= 100
+            hero.level += 1
+            hero.max_hp += 10
+            hero.hp = hero.max_hp
+        rotate_contracts()
+
+    await broadcast_states()
+
+    return {
+        "action_points": state.action_points,
+        "contribution": contribution,
+        "completed": completed,
+        "reward": reward,
+        "contract": contract_snapshot(),
+        "hero": hero_snapshot(hero),
+    }
 
 
 @app.post("/api/raids/attack")

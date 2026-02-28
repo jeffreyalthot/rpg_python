@@ -37,6 +37,13 @@ const raidBossNameEl = document.getElementById('raidBossName');
 const raidBossBarEl = document.getElementById('raidBossBar');
 const raidBossHpEl = document.getElementById('raidBossHp');
 const raidRankingEl = document.getElementById('raidRanking');
+const contractStatusEl = document.getElementById('contractStatus');
+const contractTitleEl = document.getElementById('contractTitle');
+const contractDescriptionEl = document.getElementById('contractDescription');
+const contractBarEl = document.getElementById('contractBar');
+const contractProgressEl = document.getElementById('contractProgress');
+const contractContributeButton = document.getElementById('contractContributeButton');
+const contractContributorsEl = document.getElementById('contractContributors');
 const equipmentEl = document.getElementById('equipment');
 const itemCatalogEl = document.getElementById('itemCatalog');
 const itemSearchInput = document.getElementById('itemSearch');
@@ -63,6 +70,7 @@ let worldPositions = new Map();
 let currentGuild = null;
 let guildChatMessages = [];
 let raidState = null;
+let contractState = null;
 let globalChatMessages = [];
 let allItems = [];
 let filteredItems = [];
@@ -201,6 +209,7 @@ function renderMenu() {
         renderGuildChat();
         renderGlobalChat();
         renderRaid();
+        renderContracts();
         renderMenu();
         renderActionPanel();
         addLog('Vous avez quitté le monde.');
@@ -518,6 +527,86 @@ function renderRaid() {
   raidAttackButton.disabled = !username || !currentGuild;
 }
 
+function renderContracts() {
+  if (!contractStatusEl || !contractTitleEl || !contractDescriptionEl || !contractBarEl || !contractProgressEl || !contractContributorsEl || !contractContributeButton) {
+    return;
+  }
+
+  if (!contractState) {
+    contractStatusEl.textContent = 'Contrat indisponible.';
+    contractTitleEl.textContent = 'Mission inconnue';
+    contractDescriptionEl.textContent = 'Chargement...';
+    contractBarEl.style.width = '0%';
+    contractProgressEl.textContent = 'Progression: -- / --';
+    contractContributorsEl.innerHTML = '<li>Données indisponibles.</li>';
+    contractContributeButton.disabled = true;
+    return;
+  }
+
+  const percent = Math.max(0, Math.min(100, (contractState.progress / contractState.goal) * 100));
+  contractTitleEl.textContent = `${contractState.title} • Saison ${contractState.season}`;
+  contractDescriptionEl.textContent = contractState.description;
+  contractBarEl.style.width = `${percent}%`;
+  contractProgressEl.textContent = `Progression: ${contractState.progress} / ${contractState.goal}`;
+
+  if (!username) {
+    contractStatusEl.textContent = 'Connectez-vous pour contribuer au contrat de saison.';
+  } else {
+    contractStatusEl.textContent = 'Ajoutez vos ressources pour accélérer les récompenses globales.';
+  }
+
+  contractContributeButton.disabled = !username;
+  contractContributorsEl.innerHTML = '';
+  if (!contractState.contributors?.length) {
+    contractContributorsEl.innerHTML = '<li>Aucun contributeur pour l'instant.</li>';
+    return;
+  }
+
+  contractState.contributors.slice(0, 8).forEach((entry, index) => {
+    const li = document.createElement('li');
+    li.textContent = `${index + 1}. ${entry.username} — ${entry.points} pts`;
+    contractContributorsEl.appendChild(li);
+  });
+}
+
+async function refreshContracts() {
+  const response = await fetch('/api/contracts/current');
+  if (!response.ok) {
+    return;
+  }
+  contractState = await response.json();
+  renderContracts();
+}
+
+async function contributeContract() {
+  if (!username) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+
+  const response = await fetch('/api/contracts/contribute', { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Contribution impossible';
+    return;
+  }
+
+  renderPA(data.action_points);
+  syncHero(data.hero);
+  renderHeroStats();
+  contractState = data.contract || contractState;
+  renderContracts();
+
+  const message = data.completed
+    ? `Contrat terminé ! Récompense: +${data.reward.gold} or et +${data.reward.xp} XP.`
+    : `Contribution validée: +${data.contribution} progression au contrat.`;
+  statusEl.textContent = message;
+  addLog(message);
+}
+
 async function refreshRaid() {
   const response = await fetch('/api/raids/current');
   if (!response.ok) {
@@ -595,6 +684,7 @@ async function createOrJoinGuild(mode) {
   renderGuildChat();
   renderGlobalChat();
   renderRaid();
+  renderContracts();
   refreshGuilds();
   statusEl.textContent = `Vous êtes maintenant dans la guilde ${currentGuild}.`;
   addLog(`Guilde: ${mode === 'create' ? 'création' : 'adhésion'} ${currentGuild}.`);
@@ -622,6 +712,7 @@ async function leaveGuild() {
   renderGuildChat();
   renderGlobalChat();
   renderRaid();
+  renderContracts();
   refreshGuilds();
   statusEl.textContent = 'Vous avez quitté la guilde.';
   addLog('Sortie de guilde confirmée.');
@@ -1069,9 +1160,11 @@ ws.onmessage = (event) => {
     renderPlayers(data.players);
     renderGuildRanking(data.guilds || []);
     raidState = data.raid || raidState;
+    contractState = data.contracts || contractState;
     duelLeaderboard = data.duels || duelLeaderboard;
     globalChatMessages = data.global_chat || globalChatMessages;
     renderRaid();
+    renderContracts();
     renderGlobalChat();
     renderDuelStats();
   }
@@ -1143,6 +1236,7 @@ loginForm.addEventListener('submit', async (event) => {
   renderGuildChat();
   renderGlobalChat();
   renderRaid();
+  renderContracts();
   refreshGuilds();
   addLog(`Bienvenue ${username}, ton aventure commence.`);
 });
@@ -1194,6 +1288,10 @@ raidAttackButton?.addEventListener('click', async () => {
   await attackRaidBoss();
 });
 
+contractContributeButton?.addEventListener('click', async () => {
+  await contributeContract();
+});
+
 duelButton?.addEventListener('click', async () => {
   await runDuel();
 });
@@ -1214,6 +1312,7 @@ renderGuildStatus();
 renderGuildChat();
 renderGlobalChat();
 renderRaid();
+renderContracts();
 renderDuelOpponents();
 renderDuelLog();
 addLog('Le portail d\'Aetheria est ouvert.');
@@ -1221,5 +1320,7 @@ loadOptions();
 refreshWorld();
 refreshGuilds();
 refreshRaid();
+refreshContracts();
 setInterval(refreshWorld, 60000);
 setInterval(refreshRaid, 15000);
+setInterval(refreshContracts, 20000);
