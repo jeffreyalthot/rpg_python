@@ -27,6 +27,39 @@ guild_messages: Dict[str, Deque[dict]] = {}
 connections: Set[WebSocket] = set()
 world = build_world()
 MAX_GUILD_MESSAGES = 25
+raid_boss_names = ["Hydre Astrale", "Titan de Cendre", "Liche du Néant", "Golem Tempête"]
+raid_state = {
+    "name": raid_boss_names[0],
+    "level": 1,
+    "max_hp": 600,
+    "hp": 600,
+    "guild_damage": {},
+    "last_reset_at": datetime.now(timezone.utc).isoformat(),
+}
+
+
+def raid_snapshot() -> dict:
+    ranking = [
+        {"guild": guild, "damage": damage}
+        for guild, damage in sorted(raid_state["guild_damage"].items(), key=lambda item: (-item[1], item[0].lower()))
+    ]
+    return {
+        "name": raid_state["name"],
+        "level": raid_state["level"],
+        "max_hp": raid_state["max_hp"],
+        "hp": raid_state["hp"],
+        "ranking": ranking,
+        "last_reset_at": raid_state["last_reset_at"],
+    }
+
+
+def reset_raid(next_level: int) -> None:
+    raid_state["level"] = next_level
+    raid_state["max_hp"] = 600 + (next_level - 1) * 140
+    raid_state["hp"] = raid_state["max_hp"]
+    raid_state["name"] = raid_boss_names[(next_level - 1) % len(raid_boss_names)]
+    raid_state["guild_damage"] = {}
+    raid_state["last_reset_at"] = datetime.now(timezone.utc).isoformat()
 
 
 @app.on_event("startup")
@@ -64,6 +97,7 @@ async def broadcast_states() -> None:
             for name, state in players.items()
         },
         "guilds": guild_snapshot,
+        "raid": raid_snapshot(),
     }
     disconnected: Set[WebSocket] = set()
     for ws in connections:
@@ -205,6 +239,54 @@ async def get_guilds():
         for name, members in sorted(guild_members.items(), key=lambda item: (-len(item[1]), item[0].lower()))
     ]
     return {"guilds": ranking}
+
+
+@app.get("/api/raids/current")
+async def get_current_raid():
+    return raid_snapshot()
+
+
+@app.post("/api/raids/attack")
+async def attack_raid_boss(username: str = Form(...)):
+    username = username.strip()
+    guild_name = player_guilds.get(username)
+
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    if guild_name is None or guild_name not in guild_members:
+        return JSONResponse({"error": "Rejoignez une guilde pour attaquer le boss de raid"}, status_code=409)
+
+    state = normalize_player_state(players[username])
+    if state.action_points <= 0:
+        return JSONResponse({"error": "PA insuffisants"}, status_code=400)
+
+    state.action_points -= 1
+    players[username] = state
+
+    hero = get_or_create_hero(username)
+    rng = Random(f"raid:{username}:{datetime.now(timezone.utc).isoformat()}")
+    damage = 8 + hero.level * 2 + rng.randint(0, 6)
+    raid_state["hp"] = max(0, raid_state["hp"] - damage)
+    raid_state["guild_damage"][guild_name] = raid_state["guild_damage"].get(guild_name, 0) + damage
+
+    defeated = raid_state["hp"] <= 0
+    defeated_boss = None
+    if defeated:
+        defeated_boss = {
+            "name": raid_state["name"],
+            "level": raid_state["level"],
+        }
+        reset_raid(raid_state["level"] + 1)
+
+    await broadcast_states()
+
+    return {
+        "damage": damage,
+        "action_points": state.action_points,
+        "defeated": defeated,
+        "defeated_boss": defeated_boss,
+        "raid": raid_snapshot(),
+    }
 
 
 @app.post("/api/guilds/create")

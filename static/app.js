@@ -28,6 +28,12 @@ const guildRankingEl = document.getElementById('guildRanking');
 const guildChatEl = document.getElementById('guildChat');
 const guildMessageInput = document.getElementById('guildMessage');
 const sendGuildMessageButton = document.getElementById('sendGuildMessageButton');
+const raidStatusEl = document.getElementById('raidStatus');
+const raidAttackButton = document.getElementById('raidAttackButton');
+const raidBossNameEl = document.getElementById('raidBossName');
+const raidBossBarEl = document.getElementById('raidBossBar');
+const raidBossHpEl = document.getElementById('raidBossHp');
+const raidRankingEl = document.getElementById('raidRanking');
 
 let username = null;
 let maxPA = 20;
@@ -35,6 +41,7 @@ let worldState = null;
 let worldPositions = new Map();
 let currentGuild = null;
 let guildChatMessages = [];
+let raidState = null;
 
 const hero = {
   level: 1,
@@ -161,6 +168,7 @@ function renderMenu() {
         guildChatMessages = [];
         renderGuildStatus();
         renderGuildChat();
+        renderRaid();
         renderMenu();
         renderActionPanel();
         addLog('Vous avez quitté le monde.');
@@ -277,6 +285,86 @@ function renderGuildStatus() {
     : 'Aucune guilde: créez-en une ou rejoignez vos alliés.';
 }
 
+function renderRaid() {
+  if (!raidStatusEl || !raidBossNameEl || !raidBossBarEl || !raidBossHpEl || !raidRankingEl || !raidAttackButton) {
+    return;
+  }
+
+  if (!raidState) {
+    raidStatusEl.textContent = 'Raid indisponible.';
+    raidBossNameEl.textContent = 'Boss inconnu';
+    raidBossBarEl.style.width = '0%';
+    raidBossHpEl.textContent = 'PV: -- / --';
+    raidRankingEl.innerHTML = '<li>Données indisponibles.</li>';
+    raidAttackButton.disabled = true;
+    return;
+  }
+
+  const hpPercent = Math.max(0, Math.min(100, (raidState.hp / raidState.max_hp) * 100));
+  raidBossNameEl.textContent = `${raidState.name} • Niveau ${raidState.level}`;
+  raidBossBarEl.style.width = `${hpPercent}%`;
+  raidBossHpEl.textContent = `PV: ${raidState.hp} / ${raidState.max_hp}`;
+
+  raidRankingEl.innerHTML = '';
+  if (!raidState.ranking?.length) {
+    raidRankingEl.innerHTML = '<li>Aucune guilde n\'a encore infligé de dégâts.</li>';
+  } else {
+    raidState.ranking.slice(0, 8).forEach((entry, index) => {
+      const li = document.createElement('li');
+      li.textContent = `${index + 1}. ${entry.guild} — ${entry.damage} dégâts`;
+      raidRankingEl.appendChild(li);
+    });
+  }
+
+  if (!username) {
+    raidStatusEl.textContent = 'Connectez-vous pour participer au raid.';
+  } else if (!currentGuild) {
+    raidStatusEl.textContent = 'Rejoignez une guilde pour attaquer le boss mondial.';
+  } else {
+    raidStatusEl.textContent = `Votre guilde ${currentGuild} peut attaquer le boss en continu.`;
+  }
+
+  raidAttackButton.disabled = !username || !currentGuild;
+}
+
+async function refreshRaid() {
+  const response = await fetch('/api/raids/current');
+  if (!response.ok) {
+    return;
+  }
+  raidState = await response.json();
+  renderRaid();
+}
+
+async function attackRaidBoss() {
+  if (!username || !currentGuild) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+
+  const response = await fetch('/api/raids/attack', { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Attaque impossible.';
+    return;
+  }
+
+  raidState = data.raid;
+  renderPA(data.action_points);
+  renderRaid();
+
+  let summary = `Vous infligez ${data.damage} dégâts au boss de raid.`;
+  if (data.defeated && data.defeated_boss) {
+    summary += ` ${data.defeated_boss.name} (Niv.${data.defeated_boss.level}) est vaincu ! Nouveau boss apparu.`;
+  }
+
+  statusEl.textContent = summary;
+  addLog(summary);
+}
+
 async function refreshGuilds() {
   const response = await fetch('/api/guilds');
   if (!response.ok) {
@@ -314,6 +402,7 @@ async function createOrJoinGuild(mode) {
   guildChatMessages = data.chat || [];
   renderGuildStatus();
   renderGuildChat();
+  renderRaid();
   refreshGuilds();
   statusEl.textContent = `Vous êtes maintenant dans la guilde ${currentGuild}.`;
   addLog(`Guilde: ${mode === 'create' ? 'création' : 'adhésion'} ${currentGuild}.`);
@@ -339,6 +428,7 @@ async function leaveGuild() {
   guildChatMessages = [];
   renderGuildStatus();
   renderGuildChat();
+  renderRaid();
   refreshGuilds();
   statusEl.textContent = 'Vous avez quitté la guilde.';
   addLog('Sortie de guilde confirmée.');
@@ -658,6 +748,8 @@ ws.onmessage = (event) => {
   if (data.type === 'snapshot') {
     renderPlayers(data.players);
     renderGuildRanking(data.guilds || []);
+    raidState = data.raid || raidState;
+    renderRaid();
   }
 };
 
@@ -720,6 +812,7 @@ loginForm.addEventListener('submit', async (event) => {
   renderActionPanel();
   renderGuildStatus();
   renderGuildChat();
+  renderRaid();
   refreshGuilds();
   addLog(`Bienvenue ${username}, ton aventure commence.`);
 });
@@ -759,6 +852,10 @@ sendGuildMessageButton?.addEventListener('click', async () => {
   await sendGuildMessage();
 });
 
+raidAttackButton?.addEventListener('click', async () => {
+  await attackRaidBoss();
+});
+
 renderMenu();
 renderHeroStats();
 renderInventory();
@@ -766,7 +863,10 @@ renderQuests();
 renderActionPanel();
 renderGuildStatus();
 renderGuildChat();
+renderRaid();
 addLog('Le portail d\'Aetheria est ouvert.');
 refreshWorld();
 refreshGuilds();
+refreshRaid();
 setInterval(refreshWorld, 60000);
+setInterval(refreshRaid, 15000);
