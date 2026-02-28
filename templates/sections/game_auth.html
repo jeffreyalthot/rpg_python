@@ -1,0 +1,53 @@
+<article class="card" id="authCard">
+  <h2>Authentification</h2>
+  <div class="auth-layout">
+    <form id="loginForm">
+      <h3>Connexion</h3>
+      <label for="username">Username</label>
+      <input id="username" name="username" required minlength="2" maxlength="20" />
+
+      <label for="password">Mot de passe</label>
+      <input id="password" name="password" type="password" required minlength="6" />
+
+      <button type="submit">Login</button>
+    </form>
+
+    <form id="registerForm">
+      <h3>Inscription</h3>
+      <label for="registerUsername">Username unique</label>
+      <input id="registerUsername" name="username" required minlength="2" maxlength="20" />
+
+      <label for="registerPassword">Mot de passe</label>
+      <input id="registerPassword" name="password" type="password" required minlength="6" />
+
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required />
+
+      <label for="firstName">Prénom</label>
+      <input id="firstName" name="first_name" required />
+
+      <label for="lastName">Nom</label>
+      <input id="lastName" name="last_name" required />
+
+      <label for="birthDate">Date de naissance</label>
+      <input id="birthDate" name="birth_date" type="date" required />
+
+      <label for="hair">Cheveux</label>
+      <select id="hair" name="hair" required></select>
+      <label for="eyes">Yeux</label>
+      <select id="eyes" name="eyes" required></select>
+      <label for="mouth">Bouche</label>
+      <select id="mouth" name="mouth" required></select>
+      <label for="nose">Nez</label>
+      <select id="nose" name="nose" required></select>
+      <label for="ears">Oreilles</label>
+      <select id="ears" name="ears" required></select>
+      <label for="skinTone">Couleur de peau</label>
+      <select id="skinTone" name="skin_tone" required></select>
+      <label for="startingVillage">Village de départ (10 choix)</label>
+      <select id="startingVillage" name="starting_village" required></select>
+
+      <button type="submit">Inscription</button>
+    </form>
+  </div>
+</article>
