@@ -28,6 +28,9 @@ const guildRankingEl = document.getElementById('guildRanking');
 const guildChatEl = document.getElementById('guildChat');
 const guildMessageInput = document.getElementById('guildMessage');
 const sendGuildMessageButton = document.getElementById('sendGuildMessageButton');
+const globalChatEl = document.getElementById('globalChat');
+const globalMessageInput = document.getElementById('globalMessage');
+const sendGlobalMessageButton = document.getElementById('sendGlobalMessageButton');
 const raidStatusEl = document.getElementById('raidStatus');
 const raidAttackButton = document.getElementById('raidAttackButton');
 const raidBossNameEl = document.getElementById('raidBossName');
@@ -54,6 +57,7 @@ let worldPositions = new Map();
 let currentGuild = null;
 let guildChatMessages = [];
 let raidState = null;
+let globalChatMessages = [];
 let allItems = [];
 let connectedPlayers = [];
 
@@ -183,8 +187,10 @@ function renderMenu() {
         statusEl.textContent = 'Déconnecté.';
         currentGuild = null;
         guildChatMessages = [];
+        globalChatMessages = [];
         renderGuildStatus();
         renderGuildChat();
+        renderGlobalChat();
         renderRaid();
         renderMenu();
         renderActionPanel();
@@ -358,6 +364,54 @@ function renderGuildChat() {
   });
 }
 
+
+function renderGlobalChat() {
+  if (!globalChatEl) {
+    return;
+  }
+
+  globalChatEl.innerHTML = '';
+  if (!globalChatMessages.length) {
+    globalChatEl.innerHTML = '<li>Le canal mondial est encore silencieux.</li>';
+    return;
+  }
+
+  [...globalChatMessages].reverse().forEach((entry) => {
+    const li = document.createElement('li');
+    const time = new Date(entry.created_at).toLocaleTimeString();
+    li.textContent = `[${time}] ${entry.author}: ${entry.message}`;
+    globalChatEl.appendChild(li);
+  });
+}
+
+async function sendGlobalMessage() {
+  if (!username || !globalMessageInput) {
+    return;
+  }
+
+  const content = globalMessageInput.value.trim();
+  if (content.length < 2) {
+    statusEl.textContent = 'Le message global doit contenir au moins 2 caractères.';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('message', content);
+
+  const response = await fetch('/api/chat/global', { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Message global non envoyé.';
+    return;
+  }
+
+  globalChatMessages = data.chat || [];
+  globalMessageInput.value = '';
+  renderGlobalChat();
+}
+
 function renderGuildStatus() {
   if (!guildStatusEl) {
     return;
@@ -490,6 +544,7 @@ async function createOrJoinGuild(mode) {
   guildChatMessages = data.chat || [];
   renderGuildStatus();
   renderGuildChat();
+  renderGlobalChat();
   renderRaid();
   refreshGuilds();
   statusEl.textContent = `Vous êtes maintenant dans la guilde ${currentGuild}.`;
@@ -516,6 +571,7 @@ async function leaveGuild() {
   guildChatMessages = [];
   renderGuildStatus();
   renderGuildChat();
+  renderGlobalChat();
   renderRaid();
   refreshGuilds();
   statusEl.textContent = 'Vous avez quitté la guilde.';
@@ -926,7 +982,9 @@ ws.onmessage = (event) => {
     renderPlayers(data.players);
     renderGuildRanking(data.guilds || []);
     raidState = data.raid || raidState;
+    globalChatMessages = data.global_chat || globalChatMessages;
     renderRaid();
+    renderGlobalChat();
   }
 };
 
@@ -970,6 +1028,7 @@ loginForm.addEventListener('submit', async (event) => {
   syncHero(data.hero);
   currentGuild = data.guild || null;
   guildChatMessages = data.guild_chat || [];
+  globalChatMessages = data.global_chat || [];
   syncProfile(data.profile);
 
   if (data.start_position) {
@@ -991,6 +1050,7 @@ loginForm.addEventListener('submit', async (event) => {
   renderActionPanel();
   renderGuildStatus();
   renderGuildChat();
+  renderGlobalChat();
   renderRaid();
   refreshGuilds();
   addLog(`Bienvenue ${username}, ton aventure commence.`);
@@ -1035,6 +1095,10 @@ sendGuildMessageButton?.addEventListener('click', async () => {
   await sendGuildMessage();
 });
 
+sendGlobalMessageButton?.addEventListener('click', async () => {
+  await sendGlobalMessage();
+});
+
 raidAttackButton?.addEventListener('click', async () => {
   await attackRaidBoss();
 });
@@ -1052,6 +1116,7 @@ renderQuests();
 renderActionPanel();
 renderGuildStatus();
 renderGuildChat();
+renderGlobalChat();
 renderRaid();
 renderDuelOpponents();
 renderDuelLog();
