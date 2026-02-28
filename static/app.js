@@ -39,6 +39,10 @@ const raidBossHpEl = document.getElementById('raidBossHp');
 const raidRankingEl = document.getElementById('raidRanking');
 const equipmentEl = document.getElementById('equipment');
 const itemCatalogEl = document.getElementById('itemCatalog');
+const itemSearchInput = document.getElementById('itemSearch');
+const itemSlotFilter = document.getElementById('itemSlotFilter');
+const itemRarityFilter = document.getElementById('itemRarityFilter');
+const itemCatalogCountEl = document.getElementById('itemCatalogCount');
 const hairSelect = document.getElementById('hair');
 const eyesSelect = document.getElementById('eyes');
 const mouthSelect = document.getElementById('mouth');
@@ -59,6 +63,7 @@ let guildChatMessages = [];
 let raidState = null;
 let globalChatMessages = [];
 let allItems = [];
+let filteredItems = [];
 let connectedPlayers = [];
 
 const hero = {
@@ -291,7 +296,7 @@ function renderInventory() {
   hero.inventory.forEach((item) => {
     const li = document.createElement('li');
     const itemMeta = allItems.find((entry) => entry.name === item);
-    const stats = itemMeta ? `ATK+${itemMeta.atk} DEF+${itemMeta.def} VIT+${itemMeta.vit} INT+${itemMeta.int}` : '';
+    const stats = itemMeta ? `ATK${formatSignedStat(itemMeta.atk)} DEF${formatSignedStat(itemMeta.def)} VIT${formatSignedStat(itemMeta.vit)} INT${formatSignedStat(itemMeta.int)}` : '';
     li.innerHTML = itemMeta ? `<img src='${itemMeta.image}' alt='${item}' class='inventory-icon'> <strong>${item}</strong> <small>${stats}</small>` : item;
     if (itemMeta?.slot && itemMeta.slot !== 'consumable' && username) {
       const button = buttonLabel('Équiper');
@@ -302,13 +307,53 @@ function renderInventory() {
   });
 }
 
+function applyItemFilters() {
+  const search = itemSearchInput?.value?.trim().toLowerCase() || '';
+  const slot = itemSlotFilter?.value || 'all';
+  const rarity = itemRarityFilter?.value || 'all';
+
+  filteredItems = allItems.filter((item) => {
+    const matchesSearch = !search || item.name.toLowerCase().includes(search);
+    const matchesSlot = slot === 'all' || item.slot === slot;
+    const matchesRarity = rarity === 'all' || item.rarity === rarity;
+    return matchesSearch && matchesSlot && matchesRarity;
+  });
+}
+
+function formatSignedStat(value) {
+  return value >= 0 ? `+${value}` : `${value}`;
+}
+
+function rarityLabel(rarity) {
+  return {
+    commun: 'Commun',
+    rare: 'Rare',
+    epique: 'Épique',
+    legendaire: 'Légendaire',
+  }[rarity] || rarity;
+}
+
 function renderItemCatalog() {
   if (!itemCatalogEl) return;
+  applyItemFilters();
   itemCatalogEl.innerHTML = '';
-  allItems.forEach((item) => {
+
+  if (itemCatalogCountEl) {
+    itemCatalogCountEl.textContent = `${filteredItems.length} objet(s) affiché(s) / ${allItems.length}`;
+  }
+
+  if (!filteredItems.length) {
+    const empty = document.createElement('p');
+    empty.className = 'status';
+    empty.textContent = 'Aucun objet pour ce filtre.';
+    itemCatalogEl.appendChild(empty);
+    return;
+  }
+
+  filteredItems.forEach((item) => {
     const card = document.createElement('article');
-    card.className = 'item-card';
-    card.innerHTML = `<img src='${item.image}' alt='${item.name}'><h4>${item.name}</h4><p>${item.slot} • ${item.rarity}</p><p>ATK+${item.atk} DEF+${item.def}</p><p>VIT+${item.vit} INT+${item.int}</p>`;
+    card.className = `item-card rarity-${item.rarity}`;
+    card.innerHTML = `<img src='${item.image}' alt='${item.name}'><h4>${item.name}</h4><p>${item.slot} • ${rarityLabel(item.rarity)}</p><p>ATK${formatSignedStat(item.atk)} DEF${formatSignedStat(item.def)}</p><p>VIT${formatSignedStat(item.vit)} INT${formatSignedStat(item.int)}</p>`;
     itemCatalogEl.appendChild(card);
   });
 }
@@ -952,6 +997,21 @@ async function loadOptions() {
   if (!response.ok) return;
   const data = await response.json();
   allItems = data.items || [];
+
+  if (itemSlotFilter) {
+    const slots = ['all', ...new Set(allItems.map((item) => item.slot))];
+    itemSlotFilter.innerHTML = slots
+      .map((slot) => `<option value='${slot}'>${slot === 'all' ? 'Tous les emplacements' : slot}</option>`)
+      .join('');
+  }
+
+  if (itemRarityFilter) {
+    const rarities = ['all', ...new Set(allItems.map((item) => item.rarity))];
+    itemRarityFilter.innerHTML = rarities
+      .map((rarity) => `<option value='${rarity}'>${rarity === 'all' ? 'Toutes les raretés' : rarityLabel(rarity)}</option>`)
+      .join('');
+  }
+
   renderItemCatalog();
 
   const mapping = { hair: hairSelect, eyes: eyesSelect, mouth: mouthSelect, nose: noseSelect, ears: earsSelect, skin_tone: skinToneSelect };
@@ -1106,6 +1166,11 @@ raidAttackButton?.addEventListener('click', async () => {
 duelButton?.addEventListener('click', async () => {
   await runDuel();
 });
+
+
+itemSearchInput?.addEventListener('input', renderItemCatalog);
+itemSlotFilter?.addEventListener('change', renderItemCatalog);
+itemRarityFilter?.addEventListener('change', renderItemCatalog);
 
 renderMenu();
 renderHeroStats();

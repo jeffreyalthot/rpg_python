@@ -112,6 +112,16 @@
 
       <article class="card">
         <h2>Objets obtenables (liste complète)</h2>
+        <div class="item-filters">
+          <input id="itemSearch" type="search" placeholder="Rechercher un objet" />
+          <select id="itemSlotFilter">
+            <option value="all">Tous les emplacements</option>
+          </select>
+          <select id="itemRarityFilter">
+            <option value="all">Toutes les raretés</option>
+          </select>
+        </div>
+        <p id="itemCatalogCount" class="status">-- objet(s)</p>
         <div id="itemCatalog" class="item-catalog"></div>
       </article>
 
