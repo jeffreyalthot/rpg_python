@@ -77,6 +77,18 @@ contract_state = {
     "contributors": {},
     "last_rotation_at": datetime.now(timezone.utc).isoformat(),
 }
+daily_template = {
+    "explore": 3,
+    "social": 2,
+    "combat": 2,
+}
+daily_state = {
+    "date": datetime.now(timezone.utc).date().isoformat(),
+    "targets": dict(daily_template),
+    "progress": {},
+    "completions": {},
+    "last_reset_at": datetime.now(timezone.utc).isoformat(),
+}
 
 
 def get_village_position(village_name: str) -> tuple[int, int]:
@@ -208,6 +220,64 @@ def reset_raid(next_level: int) -> None:
     raid_state["last_reset_at"] = datetime.now(timezone.utc).isoformat()
 
 
+def ensure_daily_cycle() -> None:
+    today = datetime.now(timezone.utc).date().isoformat()
+    if daily_state["date"] == today:
+        return
+
+    daily_state["date"] = today
+    daily_state["targets"] = dict(daily_template)
+    daily_state["progress"] = {}
+    daily_state["last_reset_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def ensure_daily_progress(username: str) -> dict:
+    ensure_daily_cycle()
+    if username not in daily_state["progress"]:
+        daily_state["progress"][username] = {
+            "explore": 0,
+            "social": 0,
+            "combat": 0,
+            "claimed": False,
+        }
+    return daily_state["progress"][username]
+
+
+def add_daily_progress(username: str, category: str, amount: int = 1) -> None:
+    progress = ensure_daily_progress(username)
+    target = daily_state["targets"].get(category, 0)
+    if target <= 0:
+        return
+    progress[category] = min(target, progress.get(category, 0) + amount)
+
+
+def daily_challenge_snapshot(username: str | None = None) -> dict:
+    ensure_daily_cycle()
+    ranking = [
+        {"username": name, "completions": count}
+        for name, count in sorted(daily_state["completions"].items(), key=lambda item: (-item[1], item[0].lower()))
+    ]
+
+    payload = {
+        "date": daily_state["date"],
+        "targets": dict(daily_state["targets"]),
+        "ranking": ranking[:10],
+        "last_reset_at": daily_state["last_reset_at"],
+    }
+    if username:
+        progress = ensure_daily_progress(username)
+        completed = all(progress[key] >= daily_state["targets"][key] for key in daily_state["targets"])
+        payload["personal"] = {
+            "explore": progress["explore"],
+            "social": progress["social"],
+            "combat": progress["combat"],
+            "claimed": progress["claimed"],
+            "completed": completed,
+        }
+
+    return payload
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     init_db()
@@ -274,6 +344,7 @@ async def broadcast_states() -> None:
         "global_chat": list(global_messages),
         "party_board": party_board_snapshot(),
         "events": community_events_snapshot(),
+        "daily": daily_challenge_snapshot(),
     }
     disconnected: Set[WebSocket] = set()
     for ws in connections:
@@ -405,6 +476,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
     state = get_or_create_player(username)
     hero = get_or_create_hero(username)
     ensure_social_profile(username)
+    ensure_daily_progress(username)
     await broadcast_states()
     guild_name = player_guilds.get(username)
     guild_chat = list(guild_messages[guild_name]) if guild_name in guild_messages else []
@@ -427,6 +499,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
         "party_board": party_board_snapshot(),
         "events": community_events_snapshot(),
         "social": social_snapshot(username),
+        "daily": daily_challenge_snapshot(username),
     }
 
 
@@ -468,6 +541,7 @@ async def adventure(username: str = Form(...), tile_kind: str = Form("plain")):
     rng = Random(f"{username}:{datetime.now(timezone.utc).isoformat()}")
     outcome = outcome_for_tile(tile_kind.strip(), rng)
     details = apply_adventure(hero, outcome)
+    add_daily_progress(username, "explore")
 
     await broadcast_states()
 
@@ -510,6 +584,8 @@ async def duel_player(username: str = Form(...), opponent: str = Form(...)):
     duel_stats[winner]["wins"] += 1
     loser = opponent if winner == username else username
     duel_stats[loser]["losses"] += 1
+    add_daily_progress(username, "combat")
+    add_daily_progress(opponent, "combat")
     push_community_event("duel", f"{winner} remporte un duel contre {loser}.", actor=winner)
 
     summary = (
@@ -581,6 +657,58 @@ async def get_community_events():
     return {"events": community_events_snapshot()}
 
 
+@app.get("/api/daily")
+async def get_daily_challenge(username: str | None = None):
+    normalized = username.strip() if username else None
+    if normalized and normalized not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+    return daily_challenge_snapshot(normalized)
+
+
+@app.post("/api/daily/claim")
+async def claim_daily_challenge(username: str = Form(...)):
+    username = username.strip()
+    if username not in players:
+        return JSONResponse({"error": "Joueur inconnu"}, status_code=404)
+
+    progress = ensure_daily_progress(username)
+    completed = all(progress[key] >= daily_state["targets"][key] for key in daily_state["targets"])
+    if not completed:
+        return JSONResponse({"error": "Défi quotidien incomplet"}, status_code=409)
+    if progress["claimed"]:
+        return JSONResponse({"error": "Récompense déjà récupérée"}, status_code=409)
+
+    hero = get_or_create_hero(username)
+    state = normalize_player_state(players[username])
+    reward = {
+        "gold": 35,
+        "xp": 20,
+        "action_points": 2,
+    }
+
+    hero.gold += reward["gold"]
+    hero.xp += reward["xp"]
+    while hero.xp >= 100:
+        hero.xp -= 100
+        hero.level += 1
+        hero.max_hp += 10
+        hero.hp = hero.max_hp
+
+    state.action_points = min(MAX_ACTION_POINTS, state.action_points + reward["action_points"])
+    players[username] = state
+    progress["claimed"] = True
+    daily_state["completions"][username] = daily_state["completions"].get(username, 0) + 1
+    push_community_event("daily", f"{username} valide son défi quotidien et motive la communauté.", actor=username)
+
+    await broadcast_states()
+    return {
+        "reward": reward,
+        "hero": hero_snapshot(hero),
+        "action_points": state.action_points,
+        "daily": daily_challenge_snapshot(username),
+    }
+
+
 @app.post("/api/contracts/contribute")
 async def contribute_contract(username: str = Form(...)):
     username = username.strip()
@@ -599,6 +727,7 @@ async def contribute_contract(username: str = Form(...)):
     contribution = 8 + hero.level + Random(f"contract:{username}:{datetime.now(timezone.utc).isoformat()}").randint(0, 5)
     contract_state["progress"] += contribution
     contract_state["contributors"][username] = contract_state["contributors"].get(username, 0) + contribution
+    add_daily_progress(username, "combat")
 
     reward = None
     completed = contract_state["progress"] >= contract_state["goal"]
@@ -652,6 +781,7 @@ async def attack_raid_boss(username: str = Form(...)):
     damage = 8 + hero.level * 2 + rng.randint(0, 6)
     raid_state["hp"] = max(0, raid_state["hp"] - damage)
     raid_state["guild_damage"][guild_name] = raid_state["guild_damage"].get(guild_name, 0) + damage
+    add_daily_progress(username, "combat")
 
     defeated = raid_state["hp"] <= 0
     defeated_boss = None
@@ -805,6 +935,7 @@ async def post_guild_message(username: str = Form(...), message: str = Form(...)
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
     )
+    add_daily_progress(username, "social")
     await broadcast_states()
     return {
         "guild": guild_name,
@@ -836,6 +967,7 @@ async def post_global_message(username: str = Form(...), message: str = Form(...
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
     )
+    add_daily_progress(username, "social")
     await broadcast_states()
     return {"chat": list(global_messages)}
 

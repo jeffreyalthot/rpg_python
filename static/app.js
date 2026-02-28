@@ -40,6 +40,10 @@ const postPartyButton = document.getElementById('postPartyButton');
 const clearPartyButton = document.getElementById('clearPartyButton');
 const partyBoardEl = document.getElementById('partyBoard');
 const communityEventsEl = document.getElementById('communityEvents');
+const dailyStatusEl = document.getElementById('dailyStatus');
+const dailyObjectivesEl = document.getElementById('dailyObjectives');
+const claimDailyButton = document.getElementById('claimDailyButton');
+const dailyRankingEl = document.getElementById('dailyRanking');
 const friendTargetInput = document.getElementById('friendTarget');
 const sendFriendRequestButton = document.getElementById('sendFriendRequestButton');
 const friendsListEl = document.getElementById('friendsList');
@@ -94,6 +98,7 @@ let myDuelStats = { wins: 0, losses: 0 };
 let partyBoardEntries = [];
 let communityEvents = [];
 let socialState = { friends: [], incoming_requests: [], outgoing_requests: [] };
+let dailyState = null;
 
 const hero = {
   level: 1,
@@ -225,6 +230,7 @@ function renderMenu() {
         partyBoardEntries = [];
         communityEvents = [];
         socialState = { friends: [], incoming_requests: [], outgoing_requests: [] };
+        dailyState = null;
         renderGuildStatus();
         renderGuildChat();
         renderGlobalChat();
@@ -233,6 +239,7 @@ function renderMenu() {
         renderFriendsPanel();
         renderRaid();
         renderContracts();
+        renderDailyChallenge();
         renderMenu();
         renderActionPanel();
         addLog('Vous avez quitté le monde.');
@@ -649,6 +656,96 @@ function renderCommunityEvents() {
     li.textContent = `[${time}] [${category}] ${entry.message}`;
     communityEventsEl.appendChild(li);
   });
+}
+
+function renderDailyChallenge() {
+  if (!dailyStatusEl || !dailyObjectivesEl || !claimDailyButton || !dailyRankingEl) {
+    return;
+  }
+
+  if (!dailyState) {
+    dailyStatusEl.textContent = 'Défi quotidien indisponible.';
+    dailyObjectivesEl.innerHTML = '<li>Chargement des objectifs...</li>';
+    dailyRankingEl.innerHTML = '<li>Aucune donnée de régularité.</li>';
+    claimDailyButton.disabled = true;
+    return;
+  }
+
+  const targets = dailyState.targets || { explore: 0, social: 0, combat: 0 };
+  const personal = dailyState.personal || { explore: 0, social: 0, combat: 0, claimed: false, completed: false };
+
+  dailyObjectivesEl.innerHTML = '';
+  [
+    ['Explorer', personal.explore, targets.explore],
+    ['Social', personal.social, targets.social],
+    ['Combat', personal.combat, targets.combat],
+  ].forEach(([label, current, target]) => {
+    const li = document.createElement('li');
+    li.textContent = `${label}: ${current} / ${target}`;
+    dailyObjectivesEl.appendChild(li);
+  });
+
+  if (!username) {
+    dailyStatusEl.textContent = 'Connectez-vous pour participer au défi quotidien.';
+    claimDailyButton.disabled = true;
+  } else if (personal.claimed) {
+    dailyStatusEl.textContent = 'Récompense quotidienne récupérée. Rendez-vous demain !';
+    claimDailyButton.disabled = true;
+  } else if (personal.completed) {
+    dailyStatusEl.textContent = 'Défi complété ! Réclamez votre bonus de fidélité.';
+    claimDailyButton.disabled = false;
+  } else {
+    dailyStatusEl.textContent = 'Progressez sur les 3 axes pour débloquer la récompense quotidienne.';
+    claimDailyButton.disabled = true;
+  }
+
+  dailyRankingEl.innerHTML = '';
+  if (!dailyState.ranking?.length) {
+    dailyRankingEl.innerHTML = '<li>Aucune validation enregistrée pour le moment.</li>';
+    return;
+  }
+
+  dailyState.ranking.slice(0, 8).forEach((entry, index) => {
+    const li = document.createElement('li');
+    li.textContent = `${index + 1}. ${entry.username} — ${entry.completions} défi(s) validé(s)`;
+    dailyRankingEl.appendChild(li);
+  });
+}
+
+async function claimDailyReward() {
+  if (!username) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('username', username);
+
+  const response = await fetch('/api/daily/claim', { method: 'POST', body: formData });
+  const data = await response.json();
+
+  if (!response.ok) {
+    statusEl.textContent = data.error || 'Impossible de récupérer la récompense quotidienne.';
+    return;
+  }
+
+  renderPA(data.action_points);
+  syncHero(data.hero);
+  renderHeroStats();
+  dailyState = data.daily || dailyState;
+  renderDailyChallenge();
+  const message = `Défi quotidien validé: +${data.reward.gold} or, +${data.reward.xp} XP, +${data.reward.action_points} PA.`;
+  statusEl.textContent = message;
+  addLog(message);
+}
+
+async function refreshDailyChallenge() {
+  const query = username ? `?username=${encodeURIComponent(username)}` : '';
+  const response = await fetch(`/api/daily${query}`);
+  if (!response.ok) {
+    return;
+  }
+  dailyState = await response.json();
+  renderDailyChallenge();
 }
 
 async function postPartyBoardEntry() {
@@ -1469,6 +1566,10 @@ ws.onmessage = (event) => {
     renderGuildRanking(data.guilds || []);
     raidState = data.raid || raidState;
     contractState = data.contracts || contractState;
+    if (data.daily) {
+      const personal = data.daily.personal || dailyState?.personal;
+      dailyState = personal ? { ...data.daily, personal } : data.daily;
+    }
     duelLeaderboard = data.duels || duelLeaderboard;
     globalChatMessages = data.global_chat || globalChatMessages;
     partyBoardEntries = data.party_board || partyBoardEntries;
@@ -1479,7 +1580,8 @@ ws.onmessage = (event) => {
     renderPartyBoard();
     renderCommunityEvents();
     renderDuelStats();
-  renderFriendsPanel();
+    renderFriendsPanel();
+    renderDailyChallenge();
   }
 };
 
@@ -1529,6 +1631,7 @@ loginForm.addEventListener('submit', async (event) => {
   myDuelStats = data.duel_stats || myDuelStats;
   duelLeaderboard = data.duel_leaderboard || duelLeaderboard;
   socialState = data.social || socialState;
+  dailyState = data.daily || dailyState;
   syncProfile(data.profile);
 
   if (data.start_position) {
@@ -1555,7 +1658,9 @@ loginForm.addEventListener('submit', async (event) => {
   renderCommunityEvents();
   renderRaid();
   renderContracts();
+  renderDailyChallenge();
   refreshGuilds();
+  refreshDailyChallenge();
   addLog(`Bienvenue ${username}, ton aventure commence.`);
 });
 
@@ -1626,6 +1731,10 @@ sendFriendRequestButton?.addEventListener('click', async () => {
   await sendFriendRequest();
 });
 
+claimDailyButton?.addEventListener('click', async () => {
+  await claimDailyReward();
+});
+
 
 itemSearchInput?.addEventListener('input', renderItemCatalog);
 itemSlotFilter?.addEventListener('change', renderItemCatalog);
@@ -1645,6 +1754,7 @@ renderPartyBoard();
 renderCommunityEvents();
 renderRaid();
 renderContracts();
+renderDailyChallenge();
 renderDuelOpponents();
 renderDuelLog();
 renderFriendsPanel();
@@ -1654,6 +1764,8 @@ refreshWorld();
 refreshGuilds();
 refreshRaid();
 refreshContracts();
+refreshDailyChallenge();
 setInterval(refreshWorld, 60000);
 setInterval(refreshRaid, 15000);
 setInterval(refreshContracts, 20000);
+setInterval(refreshDailyChallenge, 20000);

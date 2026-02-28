@@ -19,6 +19,7 @@ Ce projet propose un mini site web multijoueur pour un jeu basé sur les **Point
 - Nouveau **classement JcJ saisonnier** avec suivi des victoires/défaites et top 10 diffusé en temps réel.
 - Nouveau **tableau de contrats communautaires**: tous les joueurs peuvent contribuer en PA pour débloquer des récompenses de saison et un classement de contributeurs en direct.
 - Extension du catalogue avec de nouveaux objets (images SVG + stats) pour enrichir les builds multijoueur.
+- Nouveau **défi quotidien communautaire**: progression en exploration/social/combat, récompense de fidélité et classement des joueurs les plus réguliers.
 
 ## Installation
 ```bash
