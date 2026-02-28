@@ -33,3 +33,6 @@ pytest -q
 - Inscription avec: username unique, mot de passe hashé, email, prénom, nom, date de naissance.
 - Connexion via username + mot de passe.
 - Le menu de l'en-tête change selon l'état connecté/déconnecté.
+- Une **carte du monde 5000 x 5000** est exposée via `/api/world` et affichée côté client.
+- Génération de contenu monde: **10 villages de départ**, **50 autres villages**, **35 champs de bataille**.
+- **25 marchands ambulants** se déplacent automatiquement d'**1 case par heure**.

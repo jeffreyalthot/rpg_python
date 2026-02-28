@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from database import create_user, get_user_by_username, init_db, verify_password
 from game_logic import MAX_ACTION_POINTS, RECHARGE_PER_HOUR, PlayerState, normalize_player_state
+from world_map import build_world, world_snapshot
 
 app = FastAPI(title="RPG Multiplayer PA")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -17,6 +18,7 @@ templates = Jinja2Templates(directory="templates")
 
 players: Dict[str, PlayerState] = {}
 connections: Set[WebSocket] = set()
+world = build_world()
 
 
 @app.on_event("startup")
@@ -129,6 +131,12 @@ async def spend_action(username: str = Form(...)):
         "max_action_points": MAX_ACTION_POINTS,
     }
 
+
+
+
+@app.get("/api/world")
+async def get_world():
+    return world_snapshot(world)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
